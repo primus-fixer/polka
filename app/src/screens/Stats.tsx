@@ -4,11 +4,13 @@ import { api, message, type Title, type YearStats } from '../api';
 import { daysLeftInYear, decimal, MONTH_LETTERS, plural, thousands, todayIso, yearOf } from '../format';
 import { Bar, Cover, Icon } from '../ui';
 import { kindLabel } from './Home';
+import YearPicture from './YearPicture';
 
 export default function Stats({ titles, nav }: { titles: Title[]; nav: Nav }) {
   const thisYear = yearOf(todayIso());
   const [year, setYear] = useState(thisYear);
   const [s, setS] = useState<YearStats | null>(null);
+  const [picture, setPicture] = useState(false);
   const firstYear = Math.min(thisYear, ...titles.map((t) => yearOf(t.finished ?? t.added)));
 
   useEffect(() => {
@@ -60,6 +62,12 @@ export default function Stats({ titles, nav }: { titles: Title[]; nav: Nav }) {
         {goal ? <Bar pct={(s.books / goal) * 100} thick /> : null}
         {pace ? <p className="small muted">{pace}</p> : !goal ? <p className="small muted">Цель на год можно задать в настройках.</p> : null}
       </section>
+
+      <button type="button" className="btn line year-pic-btn" disabled={s.books + s.films + s.series === 0} onClick={() => setPicture(true)}>
+        <Icon name="image" size={20} />
+        <span>{s.books + s.films + s.series === 0 ? `Картинка ${year} года — когда что-нибудь закончите` : `Картинка ${year} года`}</span>
+      </button>
+      {picture && <YearPicture year={year} stats={s} titles={titles} nav={nav} onClose={() => setPicture(false)} />}
 
       <div className="figures">
         {figures.map(([label, value]) => (

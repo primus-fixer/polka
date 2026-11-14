@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, message, type Goal, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
+import { takeShared } from './share';
+import { store, stored } from './storage';
 import { Icon } from './ui';
 import Add from './screens/Add';
 import Card from './screens/Card';
-import Home from './screens/Home';
+import Home, { readSort, type ShelfSort } from './screens/Home';
 import Settings from './screens/Settings';
 import Stats from './screens/Stats';
 import Want from './screens/Want';
@@ -15,7 +17,7 @@ export type Route =
   | { name: 'want' }
   | { name: 'stats' }
   | { name: 'settings' }
-  | { name: 'add'; replace?: string }
+  | { name: 'add'; replace?: string; shared?: string }
   | { name: 'card'; id: string };
 
 export type Filter = 'all' | 'book' | 'screen';
@@ -38,22 +40,6 @@ const TABS: { id: 'home' | 'want' | 'stats' | 'settings'; label: string; icon: s
   { id: 'settings', label: 'Настройки', icon: 'settings' },
 ];
 
-function stored(key: string, fallback: string): string {
-  try {
-    return localStorage.getItem(key) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function store(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    /* без хранилища просто не запомним */
-  }
-}
-
 function useWide(): boolean {
   const query = '(min-width: 900px)';
   const [wide, setWide] = useState(() => window.matchMedia(query).matches);
@@ -74,6 +60,10 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [view, setView] = useState<'shelf' | 'feed'>(() => (stored('polka.view', 'shelf') === 'feed' ? 'feed' : 'shelf'));
   const [filter, setFilter] = useState<Filter>('all');
+  // Поиск по полке: null — поле убрано. Не запоминается между запусками.
+  const [query, setQuery] = useState<string | null>(null);
+  // Порядок полки и метка — запоминаются.
+  const [sort, setSort] = useState<ShelfSort>(readSort);
   const [scheme, setScheme] = useState(() => stored('polka.scheme', 'shield'));
   const [mode, setMode] = useState<ThemeMode>(() => stored('polka.mode', 'system') as ThemeMode);
   const [goal, setGoal] = useState<Goal>({});
@@ -87,6 +77,10 @@ export default function App() {
   }, [scheme, mode]);
 
   useEffect(() => store('polka.view', view), [view]);
+  useEffect(() => {
+    store('polka.order', sort.order ?? '');
+    store('polka.tag', sort.tag ?? '');
+  }, [sort]);
 
   const loadGoal = useCallback(() => {
     api.settings(year).then((s) => setGoal(s.goal)).catch(() => undefined);
@@ -117,6 +111,25 @@ export default function App() {
       cloud.then((f) => f());
     };
   }, [reload]);
+
+  // «Поделиться» → «Полка» на Android: текст со ссылкой открывает добавление.
+  useEffect(() => {
+    if (!loaded) return;
+    const check = () => {
+      const text = takeShared();
+      if (!text) return;
+      setHistory([{ name: 'home' }]);
+      setRoute({ name: 'add', shared: text });
+    };
+    check();
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
+    };
+  }, [loaded]);
 
   useEffect(() => {
     if (!toast) return;
@@ -156,12 +169,14 @@ export default function App() {
 
   let body;
   if (!loaded) body = <p className="muted">Открываю полку…</p>;
-  else if (route.name === 'home') body = <Home titles={titles} nav={nav} wide={wide} view={view} setView={setView} filter={filter} setFilter={setFilter} goal={goal} year={year} />;
+  else if (route.name === 'home') body = (
+      <Home titles={titles} nav={nav} wide={wide} view={view} setView={setView} filter={filter} setFilter={setFilter} goal={goal} year={year} query={query} setQuery={setQuery} sort={sort} setSort={setSort} />
+    );
   else if (route.name === 'want') body = <Want titles={titles} nav={nav} filter={filter} setFilter={setFilter} />;
   else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} />;
   else if (route.name === 'settings')
     body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} onSynced={reload} nav={nav} />;
-  else if (route.name === 'add') body = <Add titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} />;
+  else if (route.name === 'add') body = <Add key={route.shared ?? 'add'} titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} shared={route.shared} />;
   else {
     const t = titles.find((x) => x.id === route.id);
     body = t ? <Card key={t.id} t={t} titles={titles} nav={nav} wide={wide} /> : <p className="muted">Запись удалена.</p>;

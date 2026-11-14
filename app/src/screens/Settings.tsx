@@ -180,7 +180,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.4.0</p>
+      <p className="small muted3">Полка 0.5.0</p>
     </div>
   );
 }

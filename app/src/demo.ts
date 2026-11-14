@@ -302,6 +302,14 @@ export const demo: Api = {
   },
   lanUnpair: async () => clone(lan),
   onLan: async () => () => undefined,
+  coverBlob: async (id) => (await fetch(id)).blob(),
+  saveImage: async (name, data) => {
+    const a = document.createElement('a');
+    a.href = `data:image/png;base64,${data}`;
+    a.download = name;
+    a.click();
+    return name;
+  },
   // Облако в демо — понарошку: вход и обмен только изображаются, файлы никуда не уходят.
   cloudStatus: async () => clone({ ...cloud, backup_password: backup.password, notice: null }),
   cloudDavLogin: async (kind, url, user, password) => {
