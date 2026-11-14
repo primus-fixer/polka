@@ -8,6 +8,7 @@
 //! - `backup` — резервная копия: журнал и обложки в одном файле, зашифрованном паролем копии;
 //! - `sync`, `pairing`, `lan` — обмен по Wi-Fi: связь по коду (SPAKE2), поиск в сети, обмен записями и обложками.
 //! - `cloud` — обмен через облако (Яндекс Диск, свой сервер WebDAV): зашифрованные файлы событий и обложек.
+//! - `reader` — читалка: книги EPUB и FB2, главы для страницы, оглавление, поиск, место чтения.
 
 pub mod backup;
 pub mod catalog;
@@ -19,6 +20,7 @@ pub mod isbn;
 pub mod lan;
 pub mod model;
 pub mod pairing;
+pub mod reader;
 pub mod stats;
 pub mod sync;
 

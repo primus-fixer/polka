@@ -4,6 +4,7 @@
 //! Поиск в каталогах и скачивание обложек идут в фоновом потоке, чтобы окно не замирало.
 //! Снимки обложек отдаёт протокол `cover` (адрес `cover://localhost/<id>` или
 //! `http://cover.localhost/<id>` на Windows и Android) — так экран не гоняет картинки через команды.
+//! Картинки книг в читалке — протокол `book` (см. `reader`).
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -20,6 +21,7 @@ use tauri::{Manager, State};
 mod backup;
 mod cloud;
 mod lan;
+mod reader;
 
 /// Версия «Полки» — пишется в резервные копии.
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -490,10 +492,17 @@ fn cover_response(state: &AppState, path: &str) -> tauri::http::Response<Vec<u8>
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default().register_uri_scheme_protocol("cover", |ctx, request| {
-        let state = ctx.app_handle().state::<AppState>();
-        cover_response(&state, request.uri().path())
-    });
+    let builder = tauri::Builder::default()
+        .register_uri_scheme_protocol("cover", |ctx, request| {
+            let state = ctx.app_handle().state::<AppState>();
+            cover_response(&state, request.uri().path())
+        })
+        // Картинки книг: книгу, может быть, придётся прочитать с диска — не в потоке окна.
+        .register_asynchronous_uri_scheme_protocol("book", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_string();
+            tauri::async_runtime::spawn_blocking(move || responder.respond(reader::response(&app, &path)));
+        });
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     // Окно выбора папки для резервных копий.
@@ -511,16 +520,18 @@ pub fn run() {
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
+            app.manage(reader::Books::default());
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
             cloud::start(app.handle().clone());
             Ok(())
         })
-        .on_window_event(|_, event| {
+        .on_window_event(|window, event| match event {
             // Вернулись в «Полку» — пора обменяться через облако, если давно не обменивались.
-            if let tauri::WindowEvent::Focused(true) = event {
-                cloud::resumed();
-            }
+            tauri::WindowEvent::Focused(true) => cloud::resumed(),
+            // Файл книги перетащили в окно — открыть в читалке.
+            tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => reader::dropped(window.app_handle(), paths),
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             titles,
@@ -567,6 +578,16 @@ pub fn run() {
             cloud::cloud_sync_now,
             cloud::cloud_every,
             cloud::cloud_disconnect,
+            reader::book_import,
+            reader::book_import_incoming,
+            reader::book_open,
+            reader::book_chapter,
+            reader::book_search,
+            reader::book_files,
+            reader::book_forget,
+            reader::reading_list,
+            reader::reading_save,
+            reader::open_link,
         ])
         .run(tauri::generate_context!())
         .expect("«Полка» не запустилась");

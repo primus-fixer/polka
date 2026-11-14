@@ -392,7 +392,7 @@ pub fn clean_uploads(dir: &Path) {
     let _ = std::fs::remove_dir_all(dir.join("restore"));
 }
 
-fn upload_path(state: &AppState, id: &str) -> Res<PathBuf> {
+pub(crate) fn upload_path(state: &AppState, id: &str) -> Res<PathBuf> {
     if id.len() != 16 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("неверный номер загрузки".into());
     }
@@ -405,7 +405,7 @@ pub struct Upload {
     pub size: u64,
 }
 
-/// Файл копии приходит с экрана кусками (на телефоне его иначе не прочитать):
+/// Файл (копия или книга) приходит с экрана кусками (на телефоне его иначе не прочитать):
 /// заголовки `x-upload` (номер или `new`) и `x-offset`.
 #[tauri::command]
 pub fn backup_upload(state: State<AppState>, request: tauri::ipc::Request<'_>) -> Res<Upload> {
@@ -420,7 +420,7 @@ pub fn backup_upload(state: State<AppState>, request: tauri::ipc::Request<'_>) -
     std::fs::create_dir_all(uploads(&state)).map_err(err)?;
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
     if offset != size {
-        return Err("файл копии пришёл не по порядку — выберите его снова".into());
+        return Err("Файл пришёл не по порядку — выберите его снова".into());
     }
     if size + data.len() as u64 > MAX_UPLOAD {
         let _ = std::fs::remove_file(&path);

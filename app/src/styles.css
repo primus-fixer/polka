@@ -1630,3 +1630,618 @@ p {
   object-fit: contain;
   border-radius: 12px;
 }
+
+/* ——— Карточка: чтение файла книги ——— */
+.read-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.read-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px 12px;
+  text-align: right;
+}
+
+.link-btn.small {
+  min-height: 32px;
+  font-size: 13px;
+}
+
+/* ——— Читалка ———
+   Цвета — свои у каждой темы (--rd-*); переменные приложения внутри переопределены,
+   чтобы кнопки и переключатели в панелях были в той же теме. */
+.reader {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  background: var(--rd-bg);
+  color: var(--rd-ink);
+  --ink: var(--rd-ink);
+  --ink2: var(--rd-muted);
+  --ink3: var(--rd-muted);
+  --bg: var(--rd-bg);
+  --surf: var(--rd-bar);
+  --line: var(--rd-line);
+  --own: var(--rd-link);
+  --inset: color-mix(in srgb, var(--rd-ink) 8%, var(--rd-bg));
+  --rd-side: max(var(--rd-mmin), calc(var(--rd-mshare) * 100vw));
+}
+
+.rd-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 22px var(--rd-side) 4px;
+  touch-action: pan-y;
+}
+
+.rd-view {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rd-flow {
+  height: 100%;
+  column-fill: auto;
+  font-family: var(--rd-font);
+  font-size: var(--rd-size);
+  line-height: var(--rd-leading);
+  font-variant-numeric: normal;
+  text-align: var(--rd-align);
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
+  font-kerning: normal;
+  will-change: transform;
+}
+
+.rd-flow.anim {
+  transition: transform 0.24s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-flow.anim {
+    transition: none;
+  }
+}
+
+.rd-end {
+  height: 0;
+}
+
+:is(.rd-flow, .rd-note) p {
+  margin: 0;
+  text-indent: 1.5em;
+}
+
+:is(.rd-flow, .rd-note) :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.8em 0 0.6em;
+  text-align: center;
+  text-indent: 0;
+  line-height: 1.25;
+  font-weight: 700;
+  hyphens: manual;
+  break-after: avoid;
+  break-inside: avoid;
+}
+
+.rd-flow h1 {
+  font-size: 1.45em;
+  margin-top: 1.3em;
+}
+
+.rd-flow h2 {
+  font-size: 1.25em;
+  margin-top: 1.1em;
+}
+
+.rd-flow h3 {
+  font-size: 1.1em;
+}
+
+:is(.rd-flow, .rd-note) :is(h4, h5, h6) {
+  font-size: 1em;
+}
+
+.rd-flow > :first-child,
+.rd-flow > section:first-child > :first-child {
+  margin-top: 0;
+}
+
+:is(.rd-flow, .rd-note) blockquote {
+  margin: 0.8em 0 0.8em 1.5em;
+}
+
+:is(.rd-flow, .rd-note) :is(ul, ol) {
+  margin: 0.6em 0;
+  padding-left: 1.6em;
+}
+
+:is(.rd-flow, .rd-note) li p {
+  text-indent: 0;
+}
+
+:is(.rd-flow, .rd-note) img {
+  max-width: 100%;
+  max-height: calc(var(--rd-page-h, 80vh) - 1.5em);
+  height: auto;
+  vertical-align: bottom;
+}
+
+:is(.rd-flow, .rd-note) :is(p, div):has(> img:only-child),
+:is(.rd-flow, .rd-note) .bk-image {
+  margin: 0.6em 0;
+  text-align: center;
+  text-indent: 0;
+  break-inside: avoid;
+}
+
+.rd-flow figure {
+  margin: 0.8em 0;
+  text-align: center;
+  break-inside: avoid;
+}
+
+.rd-flow figcaption {
+  font-size: 0.85em;
+  color: var(--rd-muted);
+}
+
+.rd-flow hr {
+  margin: 1.2em 25%;
+  border: 0;
+  border-top: 1px solid var(--rd-line);
+}
+
+:is(.rd-flow, .rd-note) table {
+  max-width: 100%;
+  margin: 0.8em 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+:is(.rd-flow, .rd-note) :is(td, th) {
+  padding: 0.2em 0.45em;
+  border: 1px solid var(--rd-line);
+  text-indent: 0;
+  vertical-align: top;
+}
+
+:is(.rd-flow, .rd-note) :is(pre, code) {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.85em;
+}
+
+:is(.rd-flow, .rd-note) pre {
+  margin: 0.6em 0;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+:is(.rd-flow, .rd-note) :is(sup, sub) {
+  line-height: 0;
+}
+
+:is(.rd-flow, .rd-note) aside {
+  margin: 0.8em 0;
+  font-size: 0.92em;
+}
+
+:is(.rd-flow, .rd-note) .bk-link {
+  color: var(--rd-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.rd-flow [data-note] {
+  padding: 0 0.12em;
+}
+
+/* Разметка FB2: эпиграфы, стихи, подзаголовки, цитаты. */
+:is(.rd-flow, .rd-note) .bk-epigraph {
+  margin: 0.6em 0 1.4em 30%;
+  font-size: 0.92em;
+}
+
+:is(.rd-flow, .rd-note) .bk-epigraph p {
+  text-indent: 0;
+  font-style: italic;
+}
+
+:is(.rd-flow, .rd-note) .bk-author {
+  text-align: right;
+  text-indent: 0;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.95em;
+}
+
+:is(.rd-flow, .rd-note) .bk-poem {
+  margin: 1em 0 1em 10%;
+}
+
+:is(.rd-flow, .rd-note) .bk-stanza {
+  margin: 0 0 0.9em;
+  break-inside: avoid;
+}
+
+:is(.rd-flow, .rd-note) .bk-verse {
+  text-indent: 0;
+  text-align: left;
+}
+
+:is(.rd-flow, .rd-note) .bk-subtitle {
+  margin: 0.9em 0 0.5em;
+  text-align: center;
+  text-indent: 0;
+  font-weight: 700;
+}
+
+:is(.rd-flow, .rd-note) .bk-date {
+  text-align: right;
+  text-indent: 0;
+  font-style: italic;
+}
+
+:is(.rd-flow, .rd-note) .bk-gap {
+  height: 1em;
+}
+
+:is(.rd-flow, .rd-note) .bk-cite {
+  margin: 0.8em 0 0.8em 1.5em;
+  font-size: 0.95em;
+}
+
+:is(.rd-flow, .rd-note) .bk-annotation {
+  margin: 0.8em 0;
+  font-style: italic;
+}
+
+::highlight(polka-hit) {
+  background-color: var(--rd-hit);
+  color: inherit;
+}
+
+.rd-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 26px;
+  padding: 0 var(--rd-side) calc(8px + env(safe-area-inset-bottom));
+  color: var(--rd-muted);
+  font-size: 12px;
+  line-height: 18px;
+  font-family: 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.rd-status-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-wait {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  color: var(--rd-muted, var(--ink2));
+  background: var(--rd-bg, var(--bg));
+  font-family: 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.rd-top,
+.rd-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: var(--rd-bar);
+  color: var(--rd-ink);
+  box-shadow: 0 0 0 1px var(--rd-line);
+  font-family: 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.rd-top {
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: env(safe-area-inset-top) 6px 0;
+}
+
+.rd-top-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rd-top-title b,
+.rd-top-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-top-title b {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rd-top-title span {
+  color: var(--rd-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.rd-bottom {
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 18px calc(12px + env(safe-area-inset-bottom));
+}
+
+.rd-chapter {
+  overflow: hidden;
+  color: var(--rd-muted);
+  font-size: 13px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-slider {
+  width: 100%;
+  margin: 4px 0;
+  accent-color: var(--rd-link);
+}
+
+.rd-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--rd-muted);
+  font-size: 12px;
+}
+
+.rd-back {
+  position: absolute;
+  left: 50%;
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px 6px 10px;
+  border: 1px solid var(--rd-line);
+  border-radius: 999px;
+  background: var(--rd-bar);
+  color: var(--rd-ink);
+  font: 500 13px 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+  transform: translateX(-50%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.rd-back.up {
+  bottom: calc(118px + env(safe-area-inset-bottom));
+}
+
+.rd-sheet-back {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.rd-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(560px, 100%);
+  max-height: 84%;
+  overflow: auto;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: var(--rd-bar);
+  color: var(--rd-ink);
+  font-family: 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+}
+
+@media (min-width: 720px) {
+  .rd-sheet-back:has(.rd-right) {
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+
+  .rd-sheet.rd-right {
+    width: min(420px, 100%);
+    max-height: none;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    border-radius: 0;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.rd-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rd-sheet-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.rd-toc {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-toc button {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.rd-toc button.on {
+  background: var(--inset);
+  font-weight: 600;
+}
+
+.rd-search {
+  display: flex;
+  gap: 8px;
+}
+
+.rd-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  background: var(--rd-bg);
+}
+
+.rd-hits {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-hits button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--rd-line);
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.rd-hits mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: var(--rd-hit);
+  color: inherit;
+}
+
+.rd-look {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rd-size {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.rd-size .num {
+  min-width: 3ch;
+  font-size: 17px;
+  text-align: center;
+}
+
+.rd-a {
+  font-family: var(--rd-font);
+  line-height: 1;
+}
+
+.rd-a.small {
+  font-size: 15px;
+}
+
+.rd-a.big {
+  font-size: 23px;
+}
+
+.rd-themes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rd-themes button {
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.rd-themes button.on {
+  outline: 2px solid var(--rd-link);
+  outline-offset: 1px;
+}
+
+.rd-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 15px;
+}
+
+.rd-note {
+  max-height: 50vh;
+  overflow: auto;
+  font-family: var(--rd-font);
+  font-size: calc(var(--rd-size) * 0.92);
+  line-height: var(--rd-leading);
+}
+
+/* В читалке подсказка — сверху: внизу панели и кнопки. */
+.reader ~ .toast {
+  z-index: 60;
+  top: calc(66px + env(safe-area-inset-top));
+  bottom: auto;
+}

@@ -5,7 +5,7 @@ import { plural, todayIso } from '../format';
 import { parseShared } from '../share';
 import { sameTitle } from '../translit';
 import { Cover, Header, Icon, RatingPicker, Seg, TagPicker, palette } from '../ui';
-import { FORMATS, STATUS } from './Card';
+import { BOOK_ACCEPT, FORMATS, STATUS } from './Card';
 
 const coverLabel = (o: CoverOption) => [o.source, o.edition].filter(Boolean).join(' · ');
 
@@ -24,6 +24,7 @@ export default function Add({ titles, nav, replace, shared }: { titles: Title[];
   const [url, setUrl] = useState('');
   const [pick, setPick] = useState<Candidate | null>(null);
   const [manual, setManual] = useState(false);
+  const bookInput = useRef<HTMLInputElement>(null);
 
   const search = async (q = query, k = kind) => {
     if (q.trim().length < 2) return;
@@ -193,6 +194,23 @@ export default function Add({ titles, nav, replace, shared }: { titles: Title[];
             <Icon name="pencil" />
             <span>Вручную</span>
           </button>
+          {kind === 'book' && (
+            <button type="button" onClick={() => bookInput.current?.click()}>
+              <Icon name="file" />
+              <span>Файл книги</span>
+            </button>
+          )}
+          <input
+            ref={bookInput}
+            type="file"
+            accept={BOOK_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) nav.importBook(f);
+            }}
+          />
         </div>
       )}
 

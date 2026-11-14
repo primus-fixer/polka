@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, message, type Goal, type Title } from './api';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, message, type Goal, type Imported, type LocalBook, type Reading, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
-import { takeOpened, takeShared } from './share';
+import { takeBook, takeOpened, takeShared } from './share';
 import { pushWidget } from './widget';
 import { store, stored } from './storage';
 import { Icon } from './ui';
@@ -13,13 +13,17 @@ import Settings from './screens/Settings';
 import Stats from './screens/Stats';
 import Want from './screens/Want';
 
+// Читалка — отдельным куском: её код и шрифт грузятся, только когда открывают книгу.
+const Reader = lazy(() => import('./screens/Reader'));
+
 export type Route =
   | { name: 'home' }
   | { name: 'want' }
   | { name: 'stats' }
   | { name: 'settings' }
   | { name: 'add'; replace?: string; shared?: string }
-  | { name: 'card'; id: string };
+  | { name: 'card'; id: string }
+  | { name: 'reader'; hash: string };
 
 export type Filter = 'all' | 'book' | 'screen';
 
@@ -32,7 +36,14 @@ export type Nav = {
   /** Вся полка заново — после восстановления из копии. */
   replaceAll: (list: Title[]) => void;
   toast: (text: string) => void;
+  /** Открыть книгу в читалке (по хешу файла). */
+  read: (hash: string) => void;
+  /** Файл книги — на полку и в читалку; `title` — привязать к этой записи. */
+  importBook: (file: File, title?: string) => void;
 };
+
+/** Файлы книг на этом устройстве и места чтения (с этого и других устройств). */
+export type Library = { files: LocalBook[]; readings: Reading[] };
 
 const TABS: { id: 'home' | 'want' | 'stats' | 'settings'; label: string; icon: string }[] = [
   { id: 'home', label: 'Полка', icon: 'shelf' },
@@ -68,6 +79,7 @@ export default function App() {
   const [scheme, setScheme] = useState(() => stored('polka.scheme', 'shield'));
   const [mode, setMode] = useState<ThemeMode>(() => stored('polka.mode', 'system') as ThemeMode);
   const [goal, setGoal] = useState<Goal>({});
+  const [library, setLibrary] = useState<Library>({ files: [], readings: [] });
   const wide = useWide();
   const year = yearOf(todayIso());
 
@@ -87,10 +99,17 @@ export default function App() {
     api.settings(year).then((s) => setGoal(s.goal)).catch(() => undefined);
   }, [year]);
 
+  const loadLibrary = useCallback(() => {
+    Promise.all([api.bookFiles(), api.readings()])
+      .then(([files, readings]) => setLibrary({ files, readings }))
+      .catch(() => undefined);
+  }, []);
+
   const reload = useCallback(() => {
     api.titles().then(setTitles).catch(() => undefined);
     loadGoal();
-  }, [loadGoal]);
+    loadLibrary();
+  }, [loadGoal, loadLibrary]);
 
   useEffect(() => {
     // Смещение местного времени — для имён резервных копий.
@@ -101,7 +120,32 @@ export default function App() {
       .catch((e) => setToast(message(e)))
       .finally(() => setLoaded(true));
     loadGoal();
-  }, [loadGoal]);
+    loadLibrary();
+  }, [loadGoal, loadLibrary]);
+
+  // Книга пришла (файл выбрали, перетащили или открыли «С помощью…»): на полку и сразу читать.
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const opened = useCallback(
+    (r: Imported) => {
+      setTitles((ts) => (ts.some((x) => x.id === r.title.id) ? ts.map((x) => (x.id === r.title.id ? r.title : x)) : [...ts, r.title]));
+      loadLibrary();
+      setToast(r.created ? `«${r.title.title}» — теперь на полке, в «Читаю»` : null);
+      setHistory((h) => [...h.slice(-20), routeRef.current]);
+      setRoute({ name: 'reader', hash: r.hash });
+    },
+    [loadLibrary],
+  );
+  const openedRef = useRef(opened);
+  openedRef.current = opened;
+
+  // Компьютер: файл книги перетащили в окно.
+  useEffect(() => {
+    const off = api.onBook((e) => (e.ok ? openedRef.current(e.ok) : e.error && setToast(e.error))).catch(() => () => undefined);
+    return () => {
+      off.then((f) => f());
+    };
+  }, []);
 
   // Обмен по Wi-Fi и через облако идёт в фоне: пришло новое — перечитать полку.
   useEffect(() => {
@@ -123,6 +167,15 @@ export default function App() {
         setHistory([{ name: 'home' }]);
         setRoute({ name: 'card', id: open });
       }
+      // Книгу открыли «С помощью…» или прислали через «Поделиться»: файл уже у приложения.
+      const book = takeBook();
+      if (book) {
+        setToast('Открываю книгу…');
+        api
+          .bookImportIncoming(book)
+          .then((r) => openedRef.current(r))
+          .catch((e) => setToast(message(e)));
+      }
       const text = takeShared();
       if (!text) return;
       setHistory([{ name: 'home' }]);
@@ -132,9 +185,11 @@ export default function App() {
     const onVisible = () => document.visibilityState === 'visible' && check();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', check);
+    window.addEventListener('polka-book', check);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', check);
+      window.removeEventListener('polka-book', check);
     };
   }, [loaded]);
 
@@ -166,6 +221,17 @@ export default function App() {
       removed: (id) => setTitles((ts) => ts.filter((x) => x.id !== id)),
       replaceAll: setTitles,
       toast: setToast,
+      read: (hash) => {
+        setHistory([...history.slice(-20), route]);
+        setRoute({ name: 'reader', hash });
+      },
+      importBook: (file, title) => {
+        setToast(`Открываю «${file.name}»…`);
+        api
+          .bookImport(file, title ?? null)
+          .then((r) => openedRef.current(r))
+          .catch((e) => setToast(message(e)));
+      },
     }),
     [route, history],
   );
@@ -176,6 +242,31 @@ export default function App() {
     document.querySelector('.main')?.scrollTo(0, 0);
   };
 
+  if (route.name === 'reader') {
+    return (
+      <>
+        <Suspense fallback={<div className="rd-wait">Открываю книгу…</div>}>
+          <Reader
+            key={route.hash}
+            hash={route.hash}
+            nav={nav}
+            titles={titles}
+            onClose={(r) => {
+              if (r) setLibrary((l) => ({ ...l, readings: [...l.readings.filter((x) => x.title !== r.title), r] }));
+              loadLibrary();
+              nav.back();
+            }}
+          />
+        </Suspense>
+        {toast && (
+          <div className="toast" role="status" onClick={() => setToast(null)}>
+            {toast}
+          </div>
+        )}
+      </>
+    );
+  }
+
   const prevTab = [...history].reverse().find((r) => r.name === 'want' || r.name === 'stats' || r.name === 'home');
   const tab = route.name === 'card' || route.name === 'add' ? (prevTab?.name ?? 'home') : route.name;
   const showNav = !wide && route.name !== 'add';
@@ -184,7 +275,7 @@ export default function App() {
   let body;
   if (!loaded) body = <p className="muted">Открываю полку…</p>;
   else if (route.name === 'home') body = (
-      <Home titles={titles} nav={nav} wide={wide} view={view} setView={setView} filter={filter} setFilter={setFilter} goal={goal} year={year} query={query} setQuery={setQuery} sort={sort} setSort={setSort} />
+      <Home titles={titles} nav={nav} wide={wide} view={view} setView={setView} filter={filter} setFilter={setFilter} goal={goal} year={year} query={query} setQuery={setQuery} sort={sort} setSort={setSort} library={library} />
     );
   else if (route.name === 'want') body = <Want titles={titles} nav={nav} filter={filter} setFilter={setFilter} />;
   else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} />;
@@ -193,7 +284,7 @@ export default function App() {
   else if (route.name === 'add') body = <Add key={route.shared ?? 'add'} titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} shared={route.shared} />;
   else {
     const t = titles.find((x) => x.id === route.id);
-    body = t ? <Card key={t.id} t={t} titles={titles} nav={nav} wide={wide} /> : <p className="muted">Запись удалена.</p>;
+    body = t ? <Card key={t.id} t={t} titles={titles} nav={nav} wide={wide} library={library} onForget={loadLibrary} /> : <p className="muted">Запись удалена.</p>;
   }
 
   return (

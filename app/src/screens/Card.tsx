@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import type { Nav } from '../App';
-import { api, message, photoToDataUrl, type BookFormat, type Status, type Title } from '../api';
+import type { Library, Nav } from '../App';
+import { api, isMobileApp, message, photoToDataUrl, type BookFormat, type Status, type Title } from '../api';
 import { dayMonth, decimal, plural, span } from '../format';
 import { Bar, Cover, Header, Icon, RatingPicker, Row, Seg, TagPicker } from '../ui';
 import CardPicture from './CardPicture';
@@ -41,7 +41,25 @@ function metaLine(t: Title): string {
   return parts.join(' · ');
 }
 
-export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title[]; nav: Nav; wide: boolean }) {
+/** Какие файлы предлагать в окне выбора. На Android формат FB2 системе не знаком — там без отбора. */
+export const BOOK_ACCEPT = isMobileApp ? undefined : '.epub,.fb2,.zip,application/epub+zip,application/x-fictionbook+xml';
+
+/** «45 %», «4,5 %». */
+export function readPct(p: number): string {
+  return p > 0 && p < 10 ? `${(Math.round(p * 10) / 10).toString().replace('.', ',')} %` : `${Math.round(p)} %`;
+}
+
+function readTime(minutes: number): string {
+  if (minutes < 60) return plural(Math.max(1, minutes), 'минута', 'минуты', 'минут');
+  const h = Math.round(minutes / 6) / 10;
+  return `${h.toString().replace('.', ',')} ч`;
+}
+
+function fileSize(bytes: number): string {
+  return bytes >= 1 << 20 ? `${(Math.round(bytes / 104857.6) / 10).toString().replace('.', ',')} МБ` : `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}
+
+export default function Card({ t, titles, nav, wide, library, onForget }: { t: Title; titles: Title[]; nav: Nav; wide: boolean; library: Library; onForget: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(t.note ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -51,6 +69,10 @@ export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title
   const [draft, setDraft] = useState({ title: t.title, creators: t.creators.join(', '), year: t.year ?? '' });
   const [newSeason, setNewSeason] = useState('');
   const file = useRef<HTMLInputElement>(null);
+  const bookInput = useRef<HTMLInputElement>(null);
+  const bookFile = t.kind === 'book' ? library.files.find((f) => f.title === t.id) : undefined;
+  const reading = library.readings.find((r) => r.title === t.id);
+  const readable = t.kind === 'book' && t.format !== 'audio';
   const knownTags = useMemo(() => [...new Set(titles.flatMap((x) => x.tags))].sort((a, b) => a.localeCompare(b)), [titles]);
   const series = t.kind === 'series' ? seriesLine(t) : null;
 
@@ -134,6 +156,44 @@ export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title
           </div>
         </div>
       </div>
+
+      {readable && (
+        <section className="read-box">
+          {bookFile ? (
+            <button type="button" className="btn primary big" onClick={() => nav.read(bookFile.hash)}>
+              <Icon name="read" stroke={2} />
+              <span>{reading && reading.percent >= 0.5 && reading.percent < 99.5 ? `Продолжить · ${readPct(reading.percent)}` : 'Читать'}</span>
+            </button>
+          ) : (
+            <button type="button" className="btn line big" onClick={() => bookInput.current?.click()}>
+              <Icon name="file" />
+              <span>Открыть файл книги</span>
+            </button>
+          )}
+          {reading && reading.percent >= 0.5 && (
+            <div className="read-progress">
+              <Bar pct={reading.percent} />
+              <span className="small muted">
+                Прочитано {readPct(reading.percent)}
+                {reading.minutes > 0 ? ` · ${readTime(reading.minutes)} за чтением` : ''}
+                {!bookFile ? ' · файл — на другом устройстве' : ''}
+              </span>
+            </div>
+          )}
+          {!bookFile && <p className="small muted">EPUB или FB2 — книга откроется в читалке «Полки», место чтения перейдёт на другие устройства.</p>}
+          <input
+            ref={bookInput}
+            type="file"
+            accept={BOOK_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) nav.importBook(f, t.id);
+            }}
+          />
+        </section>
+      )}
 
       {edit && (
         <form
@@ -335,6 +395,33 @@ export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title
         {t.publisher && <Row label="Издательство">{t.publisher}</Row>}
         {t.isbn && <Row label="ISBN">{t.isbn}</Row>}
         {t.cover_source && <Row label="Обложка">{t.cover_source}</Row>}
+        {bookFile && (
+          <Row label="Файл книги">
+            <span className="file-row">
+              <span className="small">
+                {bookFile.name || bookFile.format.toUpperCase()} · {fileSize(bookFile.size)}
+              </span>
+              <button
+                type="button"
+                className="link-btn small"
+                onClick={async () => {
+                  try {
+                    await api.bookForget(bookFile.hash);
+                    onForget();
+                    nav.toast('Файл книги убран с этого устройства; место чтения сохранилось');
+                  } catch (e) {
+                    nav.toast(message(e));
+                  }
+                }}
+              >
+                Убрать с устройства
+              </button>
+              <button type="button" className="link-btn small" onClick={() => bookInput.current?.click()}>
+                Другой файл
+              </button>
+            </span>
+          </Row>
+        )}
       </div>
 
       <div className="danger">

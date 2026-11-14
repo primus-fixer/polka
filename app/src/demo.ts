@@ -1,6 +1,9 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, LocalBook, Reading, Season, Status, Title, YearStats } from './api';
+import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoSearch } from './demoBook';
 import { todayIso } from './format';
+
+export { demoBookImageSrc as demoBookImage } from './demoBook';
 
 const base = { creators: [] as string[], tags: [] as string[], genres: [] as string[], seasons: [] as Season[], added: '2026-09-20' };
 const T = (p: Partial<Title> & Pick<Title, 'id' | 'kind' | 'title' | 'status'>): Title => ({ ...base, ...p });
@@ -21,6 +24,7 @@ let titles: Title[] = [
   T({ id: 'goldfinch', kind: 'book', title: 'Щегол', creators: ['Донна Тартт'], year: '2013', status: 'doing', started: '2026-11-04', format: 'paper', pages: 832 }),
   T({ id: 'bb', kind: 'series', title: 'Во все тяжкие', original: 'Breaking Bad', creators: ['Винс Гиллиган'], year: '2008–2013', status: 'doing', started: '2026-10-15', tags: ['с семьёй'], kp: 8.9, imdb: 9.5, ratings_on: '2026-10-15', minutes: 47, genres: ['драма', 'криминал'], about: 'Учитель химии узнаёт о смертельном диагнозе и начинает варить метамфетамин, чтобы обеспечить семью.', seasons: seasons([7, 13, 13, 13, 16], [7, 13, 5], '2026-11-01') }),
   T({ id: 'cot', kind: 'book', title: 'Children of Time', creators: ['Adrian Tchaikovsky'], year: '2015', status: 'doing', started: '2026-11-10', format: 'ebook' }),
+  T({ id: DEMO_TITLE, kind: 'book', title: 'Смотритель маяка', creators: ['Полка'], year: '2026', status: 'doing', started: '2026-11-13', format: 'ebook', pages: 6, genres: ['Рассказ'], about: 'Короткий рассказ для проверки читалки: откройте его кнопкой «Читать».' }),
   T({ id: 'zul', kind: 'book', title: 'Зулейха открывает глаза', creators: ['Гузель Яхина'], year: '2015', status: 'want', added: '2026-11-11' }),
   T({ id: 'opp', kind: 'film', title: 'Оппенгеймер', creators: ['Кристофер Нолан'], year: '2023', status: 'want', added: '2026-11-10' }),
   T({ id: 'pir', kind: 'book', title: 'Piranesi', creators: ['Susanna Clarke'], year: '2020', status: 'want', added: '2026-11-02' }),
@@ -38,6 +42,21 @@ let cloud: CloudStatus = { ...CLOUD_OFF };
 const backupListeners = new Set<() => void>();
 const backupChanged = () => backupListeners.forEach((l) => l());
 let next = 1;
+// Читалка в демо: одна книга «на устройстве» и место, где её «читали».
+let bookFiles: LocalBook[] = [{ hash: DEMO_BOOK, title: DEMO_TITLE, name: 'smotritel.fb2', format: 'fb2', size: 48_000, added: 1_763_000_000 }];
+const demoView = demoBookView();
+let readings: Reading[] = [
+  {
+    title: DEMO_TITLE,
+    book: DEMO_BOOK,
+    chapter: 2,
+    offset: 0,
+    percent: Math.round(((demoView.chapters[0].size + demoView.chapters[1].size) / demoView.total) * 1000) / 10,
+    at: Math.floor(Date.now() / 1000) - 20 * 3600,
+    minutes: 9,
+  },
+];
+const NO_FILES = 'В демо файлы книг не открываются — это работает в приложении. Попробуйте «Смотритель маяка» на полке.';
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -354,4 +373,37 @@ export const demo: Api = {
     return clone({ ...cloud, backup_password: backup.password, notice });
   },
   onCloud: async () => () => undefined,
+  bookImport: async () => {
+    throw new Error(NO_FILES);
+  },
+  bookImportIncoming: async () => {
+    throw new Error(NO_FILES);
+  },
+  bookOpen: async (hash) => {
+    if (hash !== DEMO_BOOK || !bookFiles.length) throw new Error('Файла книги нет на этом устройстве');
+    await wait(250);
+    const t = find(DEMO_TITLE);
+    if (t.status === 'want') setStatus(t, 'doing', todayIso());
+    return { ...demoBookView(), title: clone(t) };
+  },
+  bookChapter: async (hash, index) => {
+    if (hash !== DEMO_BOOK) throw new Error('нет такой книги');
+    return demoChapter(index);
+  },
+  bookSearch: async (_hash, query) => {
+    await wait(150);
+    return demoSearch(query);
+  },
+  bookFiles: async () => clone(bookFiles.filter((b) => titles.some((t) => t.id === b.title))),
+  bookForget: async (hash) => {
+    bookFiles = bookFiles.filter((b) => b.hash !== hash);
+  },
+  readings: async () => clone(readings),
+  readingSave: async (r) => {
+    readings = readings.filter((x) => x.title !== r.title).concat(clone(r));
+  },
+  openLink: async (url) => {
+    window.open(url, '_blank', 'noopener');
+  },
+  onBook: async () => () => undefined,
 };
