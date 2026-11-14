@@ -139,8 +139,10 @@ p {
   overflow-y: auto;
 }
 
+/* Логотип — по центру над кнопкой «Добавить». */
 .wordmark {
-  margin: 0 0 24px 12px;
+  margin: 0 0 24px;
+  text-align: center;
   font-weight: 500;
   font-size: 44px;
   line-height: 50px;

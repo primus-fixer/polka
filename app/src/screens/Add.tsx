@@ -215,7 +215,7 @@ export default function Add({ titles, nav, replace, shared }: { titles: Title[];
               <Icon name="right" size={18} stroke={2} style={{ color: 'var(--ink3)' }} />
             </button>
           ))}
-          {found.failed.length > 0 && <p className="small warn-text">{found.failed.map((f) => `${f.source}: ${f.message}`).join(' · ')}</p>}
+          {found.failed.length > 0 && <p className="small warn-text">{found.failed.map((f) => (f.message.startsWith(f.source) ? f.message : `${f.source}: ${f.message}`)).join(' · ')}</p>}
           <p className="small muted foot-note">
             {kind === 'book'
               ? 'Ищем сразу в Open Library, Google Books и FantLab. Не нашлось — добавьте по ссылке или вручную.'
