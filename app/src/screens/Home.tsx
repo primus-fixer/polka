@@ -264,20 +264,25 @@ export default function Home({ titles, nav, wide, view, setView, filter, setFilt
         </p>
       )}
 
-      <div className="home-head">
-        <Seg small label="Что показывать" value={filter} options={FILTERS} onChange={setFilter} />
-        <div className="seg" role="group" aria-label="Вид" style={{ gridAutoFlow: 'column' }}>
-          <button type="button" className={`icon-seg${view === 'shelf' ? ' on' : ''}`} aria-pressed={view === 'shelf'} aria-label="Полка обложек" onClick={() => setView('shelf')}>
-            <Icon name="grid" />
-          </button>
-          <button type="button" className={`icon-seg${view === 'feed' ? ' on' : ''}`} aria-pressed={view === 'feed'} aria-label="Лента по датам" onClick={() => setView('feed')}>
-            <Icon name="list" />
-          </button>
+      {!empty && (
+        <div className="home-head">
+          <Seg small label="Что показывать" value={filter} options={FILTERS} onChange={setFilter} />
+          <div className="seg" role="group" aria-label="Вид" style={{ gridAutoFlow: 'column' }}>
+            <button type="button" className={`icon-seg${view === 'shelf' ? ' on' : ''}`} aria-pressed={view === 'shelf'} aria-label="Полка обложек" onClick={() => setView('shelf')}>
+              <Icon name="grid" />
+            </button>
+            <button type="button" className={`icon-seg${view === 'feed' ? ' on' : ''}`} aria-pressed={view === 'feed'} aria-label="Лента по датам" onClick={() => setView('feed')}>
+              <Icon name="list" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {empty && (
         <section className="empty">
+          <span className="empty-icon" aria-hidden="true">
+            <Icon name="shelf" size={34} />
+          </span>
           <h1 className="screen-title">Полка пока пустая</h1>
           <p className="muted">Добавьте книгу, фильм или сериал: найдите по названию, отсканируйте штрихкод книги или вставьте ссылку на страницу — обложка подтянется сама.</p>
           <button type="button" className="btn primary" onClick={() => nav.go({ name: 'add' })}>
@@ -323,7 +328,7 @@ export default function Home({ titles, nav, wide, view, setView, filter, setFilt
         </section>
       )}
 
-      {view === 'shelf' && goal.books && filter !== 'screen' && !narrowed ? (
+      {view === 'shelf' && goal.books && filter !== 'screen' && !narrowed && !empty ? (
         <button type="button" className="goal-line" onClick={() => nav.go({ name: 'stats' })}>
           <span className="goal-text">
             <span>Цель на {year} год</span>

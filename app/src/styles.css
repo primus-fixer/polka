@@ -937,11 +937,30 @@ p {
   color: var(--ink2);
 }
 
+/* Пустая полка — по центру, как первый экран. */
 .empty {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
+  max-width: 520px;
+  margin: 10vh auto 0;
+  text-align: center;
+}
+
+.empty .muted {
+  margin: 0;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 4px;
+  border-radius: 22px;
+  background: var(--inset);
+  color: var(--ink2);
 }
 
 /* Добавление. */
