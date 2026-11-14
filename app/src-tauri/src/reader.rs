@@ -9,7 +9,7 @@
 use crate::{err, get_title, put_title, tz_minutes, AppState, Res};
 use polka_core::db::{blob_id, Store};
 use polka_core::model::{Title, KIND};
-use polka_core::reader::{percent_decode, shelf, Book, BookFormat, Chapter, Hit, Meta, Reading, TocItem, MAX_BOOK, READING};
+use polka_core::reader::{percent_decode, shelf, Book, BookFormat, Chapter, Hit, Mark, Meta, Reading, TocItem, MARK, MAX_BOOK, READING};
 use polka_core::{new_id, now_secs, Date};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -321,6 +321,45 @@ pub fn reading_save(state: State<'_, AppState>, reading: Reading) -> Res<()> {
     let mut st = state.store()?;
     get_title(&st, &reading.title)?;
     st.put(READING, &reading.title, &reading).map_err(err)
+}
+
+/// Закладки и цитаты: все или одной записи полки — по порядку в книге.
+#[tauri::command]
+pub fn marks(state: State<'_, AppState>, title: Option<String>) -> Res<Vec<Mark>> {
+    let mut list = state.store()?.list::<Mark>(MARK).map_err(err)?;
+    if let Some(t) = title {
+        list.retain(|m| m.title == t);
+    }
+    list.sort_by(|a, b| (a.title.as_str(), a.chapter, a.offset, a.created).cmp(&(b.title.as_str(), b.chapter, b.offset, b.created)));
+    Ok(list)
+}
+
+/// Новая закладка или цитата (без номера) или правка заметки к цитате.
+#[tauri::command]
+pub fn mark_save(state: State<'_, AppState>, mark: Mark) -> Res<Mark> {
+    let mut m = mark;
+    if m.id.is_empty() {
+        m.id = new_id().map_err(err)?;
+    }
+    if m.created == 0 {
+        m.created = now_secs();
+    }
+    m.text = m.text.trim().to_string();
+    m.note = m.note.trim().to_string();
+    m.check().map_err(err)?;
+    let mut st = state.store()?;
+    get_title(&st, &m.title)?;
+    st.put(MARK, &m.id, &m).map_err(err)?;
+    Ok(m)
+}
+
+#[tauri::command]
+pub fn mark_delete(state: State<'_, AppState>, id: String) -> Res<()> {
+    let mut st = state.store()?;
+    if st.get::<Mark>(MARK, &id).map_err(err)?.is_none() {
+        return Ok(());
+    }
+    st.delete(MARK, &id).map_err(err)
 }
 
 /// Внешняя ссылка из книги — в браузере; только http, https и mailto.

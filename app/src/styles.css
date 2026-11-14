@@ -2245,3 +2245,139 @@ p {
   top: calc(66px + env(safe-area-inset-top));
   bottom: auto;
 }
+
+/* ——— Закладки и цитаты ——— */
+.rd-ribbon {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) - 2px);
+  right: calc(var(--rd-side) - 6px + env(safe-area-inset-right));
+  z-index: 1;
+  width: 22px;
+  height: 30px;
+  fill: var(--rd-link);
+  stroke: none;
+  pointer-events: none;
+}
+
+.rd-mark-btn.on svg {
+  fill: var(--rd-link);
+  stroke: var(--rd-link);
+}
+
+::highlight(polka-quote) {
+  background-color: color-mix(in srgb, var(--rd-hit) 50%, transparent);
+  color: inherit;
+}
+
+.rd-selbar {
+  position: fixed;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--rd-line);
+  border-radius: 12px;
+  background: var(--rd-bar);
+  color: var(--rd-ink);
+  font: 500 14px 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+  transform: translateX(-50%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.rd-selbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.rd-selbar button:hover {
+  background: var(--inset);
+}
+
+.rd-marks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-marks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-bottom: 1px solid var(--rd-line);
+}
+
+.rd-mark {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 21px;
+  text-align: left;
+}
+
+.rd-quote-text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--rd-font);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.rd-mark-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-mark-tools {
+  display: flex;
+  align-items: center;
+  padding-top: 4px;
+}
+
+/* Цитаты в карточке. */
+.quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quote-row {
+  padding: 12px 14px 4px;
+  border-radius: 14px;
+  background: var(--surf);
+  border: 1px solid var(--line);
+}
+
+.quote-text {
+  font-family: Literata, 'PT Serif', Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 24px;
+  white-space: pre-line;
+}
+
+.quote-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

@@ -170,8 +170,11 @@ export type BookView = { hash: string; format: FileFormat; meta: BookMeta; chapt
 export type BookHit = { chapter: number; offset: number; len: number; before: string; found: string; after: string };
 /** Файл книги на этом устройстве и запись полки, к которой он привязан. */
 export type LocalBook = { hash: string; title: string; name: string; format: FileFormat; size: number; added: number };
-/** Где остановились (запись журнала — уходит на другие устройства). */
-export type Reading = { title: string; book: string; chapter: number; offset: number; percent: number; at: number; minutes: number };
+/** Где остановились (запись журнала — уходит на другие устройства); `years` — минуты чтения по годам. */
+export type Reading = { title: string; book: string; chapter: number; offset: number; percent: number; at: number; minutes: number; years?: Record<string, number> };
+export type MarkKind = 'bookmark' | 'quote';
+/** Закладка или цитата (запись журнала): место в книге, текст, своя заметка. */
+export type Mark = { id: string; title: string; book: string; kind: MarkKind; chapter: number; offset: number; end: number; text?: string; note?: string; percent: number; created: number };
 export type Imported = { hash: string; title: Title; created: boolean };
 /** Узел главы: текст или [тег, атрибуты, …дети] — страница строит его сама, без innerHTML. */
 export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
@@ -237,6 +240,11 @@ const real = {
   bookForget: (hash: string) => invoke<void>('book_forget', { hash }),
   readings: () => invoke<Reading[]>('reading_list'),
   readingSave: (reading: Reading) => invoke<void>('reading_save', { reading }),
+  /** Закладки и цитаты: все или одной записи. */
+  marks: (title: string | null) => invoke<Mark[]>('marks', { title }),
+  /** Новая (без номера) или изменённая закладка или цитата. */
+  markSave: (mark: Mark) => invoke<Mark>('mark_save', { mark }),
+  markDelete: (id: string) => invoke<void>('mark_delete', { id }),
   /** Внешняя ссылка из книги — в браузере. */
   openLink: (url: string) => invoke<void>('open_link', { url }),
   /** Компьютер: книгу перетащили в окно. */

@@ -15,7 +15,7 @@ pub mod tree;
 
 use crate::error::{bad, Error, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read};
 use std::sync::Mutex;
 use tree::Out;
@@ -29,6 +29,8 @@ const MAX_CHAPTERS: usize = 5000;
 const MAX_TOC: usize = 5000;
 /// Запись журнала с местом чтения: по одной на книгу полки.
 pub const READING: &str = "reading";
+/// Записи журнала с закладками и цитатами.
+pub const MARK: &str = "mark";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -533,16 +535,82 @@ pub struct Reading {
     /// Минут чтения этой книги — для «Итогов».
     #[serde(default)]
     pub minutes: u32,
+    /// Те же минуты по годам: «2026» → минуты.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub years: BTreeMap<String, u32>,
+}
+
+fn hex64(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 impl Reading {
     pub fn check(&self) -> Result<()> {
-        let hex64 = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         if self.title.is_empty() || self.title.len() > 64 || !hex64(&self.book) {
             return Err(Error::Format("неверная запись о чтении".into()));
         }
         if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_CHAPTERS {
             return Err(Error::Format("неверное место в книге".into()));
+        }
+        let year = |y: &str| y.len() == 4 && y.bytes().all(|b| b.is_ascii_digit());
+        if self.years.len() > 100 || self.years.iter().any(|(y, m)| !year(y) || *m > 1_000_000) {
+            return Err(Error::Format("неверное время чтения".into()));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkKind {
+    Bookmark,
+    Quote,
+}
+
+/// Закладка или цитата — запись журнала `mark`: обменивается между устройствами, как полка.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Mark {
+    pub id: String,
+    /// Запись полки.
+    pub title: String,
+    /// SHA-256 файла книги.
+    pub book: String,
+    pub kind: MarkKind,
+    pub chapter: u32,
+    /// Начало (знаков от начала главы, UTF-16).
+    pub offset: u32,
+    /// Конец цитаты (не включая).
+    #[serde(default)]
+    pub end: u32,
+    /// Текст цитаты; у закладки — начало страницы.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    /// Своя заметка к цитате.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+    /// Где в книге, от 0 до 100.
+    pub percent: f32,
+    /// Когда сделана, секунды Unix.
+    pub created: i64,
+}
+
+impl Mark {
+    pub fn check(&self) -> Result<()> {
+        let id_ok = (1..=32).contains(&self.id.len()) && self.id.bytes().all(|b| b.is_ascii_alphanumeric());
+        if !id_ok || self.title.is_empty() || self.title.len() > 64 || !hex64(&self.book) {
+            return Err(Error::Format("неверная закладка".into()));
+        }
+        if self.text.chars().count() > 4000 {
+            return Err(Error::Format("Цитата длиннее 4000 знаков — выделите поменьше".into()));
+        }
+        if self.note.chars().count() > 2000 {
+            return Err(Error::Format("Заметка к цитате длиннее 2000 знаков".into()));
+        }
+        if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_CHAPTERS {
+            return Err(Error::Format("неверное место в книге".into()));
+        }
+        if self.kind == MarkKind::Quote && (self.end <= self.offset || self.text.trim().is_empty()) {
+            return Err(Error::Format("Цитата пустая — выделите текст".into()));
         }
         Ok(())
     }

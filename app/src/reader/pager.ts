@@ -184,6 +184,21 @@ export class Pager {
     return r;
   }
 
+  /** Текст главы от знака `off`, не длиннее `len` — подпись закладки. Абзацы — через пробел. */
+  textFrom(off: number, len: number): string {
+    if (!this.texts.length || off >= this.length) return '';
+    let i = this.nodeAt(Math.max(0, off));
+    let s = this.texts[i].data.slice(Math.max(0, off - this.starts[i]));
+    const block = (t: Text) => t.parentElement?.closest('p,div,h1,h2,h3,h4,h5,h6,li,blockquote,section,aside,td,th,dd,dt,figcaption,pre');
+    while (s.length < len * 2 && i + 1 < this.texts.length) {
+      const next = this.texts[i + 1];
+      s += (block(next) !== block(this.texts[i]) ? ' ' : '') + next.data;
+      i++;
+    }
+    const clean = s.replace(/\s+/g, ' ').trim();
+    return clean.length > len ? `${clean.slice(0, len).trimEnd()}…` : clean;
+  }
+
   /** Сколько страниц (колонок) видно сразу и высота страницы — для подписей. */
   size(): { w: number; h: number } {
     return { w: this.w, h: this.h };

@@ -587,6 +587,9 @@ pub fn run() {
             reader::book_forget,
             reader::reading_list,
             reader::reading_save,
+            reader::marks,
+            reader::mark_save,
+            reader::mark_delete,
             reader::open_link,
         ])
         .run(tauri::generate_context!())

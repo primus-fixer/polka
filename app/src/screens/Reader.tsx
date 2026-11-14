@@ -1,8 +1,8 @@
 // Читалка: глава колонками, листание касанием, свайпом, колесом и клавишами; оглавление,
 // поиск, сноски, вид страницы (размер, шрифт, интервал, поля, тема) и место чтения.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react';
-import type { Nav } from '../App';
-import { api, bookImageSrc, isMobileApp, message, type BookHit, type BookNode, type BookView, type Reading, type Title } from '../api';
+import type { Nav, ReaderAt } from '../App';
+import { api, bookImageSrc, isMobileApp, message, type BookHit, type BookNode, type BookView, type Mark, type Reading, type Title } from '../api';
 import { dayMonth, plural } from '../format';
 import { addReadingFonts, readingFontsReady } from '../reader/fonts';
 import { Pager } from '../reader/pager';
@@ -10,10 +10,12 @@ import { build, findNote } from '../reader/render';
 import { FONTS, LEADINGS, MARGINS, SIZE_MAX, SIZE_MIN, THEMES, readSettings, readSpeed, resolveTheme, saveSettings, saveSpeed, type ReaderFont, type ReaderSettings, type ReaderTheme } from '../reader/settings';
 import { store, stored } from '../storage';
 import { Icon, RatingPicker, Seg } from '../ui';
+import QuotePicture from './QuotePicture';
 
 type Spot = { chapter: number; offset: number };
 type Target = { offset?: number; anchor?: string; end?: boolean; fraction?: number; hit?: { offset: number; len: number } };
 type Panel = null | 'toc' | 'look' | 'search' | 'end';
+type Tab = 'toc' | 'bookmarks' | 'quotes';
 
 const posKey = (hash: string) => `polka.pos.${hash}`;
 
@@ -71,6 +73,33 @@ function Sheet({ title, side, onClose, children }: { title: string; side?: boole
   );
 }
 
+/** Закладки или цитаты в панели: открыть место, цитату — картинкой, удалить (со вторым нажатием). */
+function MarkList({ list, empty, where, confirmId, onOpen, onShare, onRemove }: { list: Mark[]; empty: string; where: (m: Mark) => string; confirmId: string | null; onOpen: (m: Mark) => void; onShare: (m: Mark) => void; onRemove: (m: Mark) => void }) {
+  if (!list.length) return <p className="muted">{empty}</p>;
+  return (
+    <ul className="rd-marks">
+      {list.map((m) => (
+        <li key={m.id}>
+          <button type="button" className="rd-mark" onClick={() => onOpen(m)}>
+            <span className="small muted">{where(m)}</span>
+            <span className={m.kind === 'quote' ? 'rd-quote-text' : 'rd-mark-text'}>{m.kind === 'quote' ? `«${m.text}»` : m.text || 'Закладка'}</span>
+          </button>
+          <span className="rd-mark-tools">
+            {m.kind === 'quote' && (
+              <button type="button" className="icon-btn" aria-label="Цитата картинкой" onClick={() => onShare(m)}>
+                <Icon name="share" size={18} />
+              </button>
+            )}
+            <button type="button" className={confirmId === m.id ? 'link-btn warn-text small' : 'icon-btn'} aria-label={m.kind === 'quote' ? 'Удалить цитату' : 'Удалить закладку'} onClick={() => onRemove(m)}>
+              {confirmId === m.id ? 'Удалить?' : <Icon name="trash" size={18} />}
+            </button>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const THEME_ORDER: [ReaderTheme, string][] = [
   ['auto', 'Как в «Полке»'],
   ['light', THEMES.light.label],
@@ -78,7 +107,7 @@ const THEME_ORDER: [ReaderTheme, string][] = [
   ['dark', THEMES.dark.label],
 ];
 
-export default function Reader({ hash, nav, titles, onClose }: { hash: string; nav: Nav; titles: Title[]; onClose: (r: Reading | null) => void }) {
+export default function Reader({ hash, at, nav, titles, onClose }: { hash: string; at?: ReaderAt; nav: Nav; titles: Title[]; onClose: (r: Reading | null) => void }) {
   const [view, setView] = useState<BookView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -96,6 +125,12 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
   const [searching, setSearching] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
   const [wide, setWide] = useState(() => window.innerWidth >= 880);
+  const [marks, setMarks] = useState<Mark[]>([]);
+  const [tab, setTab] = useState<Tab>('toc');
+  const [here, setHere] = useState<Mark | null>(null);
+  const [selBar, setSelBar] = useState<{ x: number; y: number } | null>(null);
+  const [quotePic, setQuotePic] = useState<Mark | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const paneRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<HTMLDivElement>(null);
@@ -110,7 +145,12 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
   navRef.current = nav;
   const busy = useRef(false);
   // Время чтения (для «Итогов») и скорость (для «осталось около…»).
-  const session = useRef({ base: 0, active: 0, last: Date.now(), saved: 0, savedSpot: '', chars: 0, ms: 0 });
+  const session = useRef({ base: 0, years: {} as Record<string, number>, active: 0, last: Date.now(), saved: 0, savedSpot: '', chars: 0, ms: 0 });
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  // Выделение для цитаты: запоминаем, пока показана кнопка (касание может его снять).
+  const selRange = useRef<{ range: Range; text: string } | null>(null);
+  const hadSelection = useRef(false);
   const touch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const skipClick = useRef(false);
   const wheelAt = useRef(0);
@@ -144,6 +184,19 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     const H = (window as unknown as { Highlight: new (r: Range) => unknown }).Highlight;
     reg.set('polka-hit', new H(range));
   };
+  /** Цитаты этой главы — подчёркнуты в тексте. */
+  const paintQuotes = useCallback(() => {
+    const reg = highlights();
+    const p = pager.current;
+    if (!reg || !p) return;
+    const ranges = marksRef.current
+      .filter((m) => m.kind === 'quote' && m.book === hash && m.chapter === cur.current.chapter)
+      .map((m) => p.rangeAt(m.offset, m.end - m.offset))
+      .filter((r): r is Range => !!r);
+    const H = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+    if (ranges.length) reg.set('polka-quote', new H(...ranges));
+    else reg.delete('polka-quote');
+  }, [hash]);
 
   /** Место — в журнал: не чаще раза в две минуты, при выходе и в конце книги — сразу. */
   const saveReading = useCallback(
@@ -153,7 +206,9 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
       const s = session.current;
       if (!v?.title || !p) return null;
       const now = Date.now();
-      const minutes = s.base + Math.round(s.active / 60_000);
+      const sessionMin = Math.round(s.active / 60_000);
+      const minutes = s.base + sessionMin;
+      const year = String(new Date().getFullYear());
       // То же место и то же время чтения — журнал не трогаем.
       const where = `${cur.current.chapter}:${cur.current.offset}:${minutes}`;
       if (where === s.savedSpot) return null;
@@ -168,6 +223,7 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
         percent: Math.round(percentAt(cur.current.chapter, cur.current.offset, p.length) * 10) / 10,
         at: Math.floor(now / 1000),
         minutes,
+        years: { ...s.years, [year]: (s.years[year] ?? 0) + sessionMin },
       };
       api.readingSave(r).catch(() => undefined);
       return r;
@@ -247,9 +303,10 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
       p.go(pg);
       if (target.hit) markHit(target.hit.offset, target.hit.len);
       arrived(i, pg);
+      paintQuotes();
       if (i + 1 < v.chapters.length) nodesOf(i + 1).catch(() => undefined);
     },
-    [hash, nodesOf, arrived],
+    [hash, nodesOf, arrived, paintQuotes],
   );
 
   const guard = useCallback(async (f: () => Promise<void>) => {
@@ -379,6 +436,7 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
       }
       if (synced) {
         session.current.base = synced.minutes;
+        session.current.years = { ...(synced.years ?? {}) };
         // Место из журнала уже записано — пока не перелистнули, писать его снова незачем.
         if (synced.book === hash) session.current.savedSpot = `${synced.chapter}:${synced.offset}:${synced.minutes}`;
         session.current.saved = Date.now();
@@ -396,6 +454,8 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
       } else if (local) {
         start = { chapter: clamp(local.chapter), target: { offset: local.offset } };
       }
+      // Открыли цитату из карточки — сразу к ней.
+      if (at) start = { chapter: clamp(at.chapter), target: { hit: { offset: at.offset, len: at.len } } };
       if (!alive) return;
       await guard(() => show(start.chapter, start.target));
       if (!alive) return;
@@ -405,6 +465,8 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     return () => {
       alive = false;
     };
+    // Место для начала берётся один раз — при открытии книги.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, hash, guard, show]);
 
   // Вид страницы: запомнить и разложить заново на том же месте.
@@ -490,6 +552,58 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     return () => window.removeEventListener('keydown', onKey);
   }, [turn, panel, note, bars, close]);
 
+  // Закладки и цитаты этой записи.
+  useEffect(() => {
+    if (!view?.title) return;
+    api
+      .marks(view.title.id)
+      .then(setMarks)
+      .catch(() => undefined);
+  }, [view]);
+  useEffect(() => {
+    if (ready) paintQuotes();
+  }, [marks, ready, paintQuotes]);
+
+  // Есть ли закладка на этой странице.
+  useEffect(() => {
+    const p = pager.current;
+    if (!p || !ready) return setHere(null);
+    const start = p.offsetOfPage(page);
+    const next = page + 1 < pages ? p.offsetOfPage(page + 1) : Number.MAX_SAFE_INTEGER;
+    setHere(marks.find((m) => m.kind === 'bookmark' && m.book === hash && m.chapter === chapter && m.offset >= start && m.offset < next) ?? null);
+  }, [marks, chapter, page, pages, ready, hash, spot]);
+
+  // Выделили текст — кнопка «В цитаты» под выделением.
+  useEffect(() => {
+    if (!ready) return;
+    let timer = 0;
+    const onSelection = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const sel = window.getSelection();
+        const flow = flowRef.current;
+        if (!sel || sel.isCollapsed || !sel.rangeCount || !flow || !flow.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+          setSelBar(null);
+          return;
+        }
+        const range = sel.getRangeAt(0);
+        selRange.current = { range: range.cloneRange(), text: sel.toString() };
+        const rects = range.getClientRects();
+        const first = rects[0] ?? range.getBoundingClientRect();
+        const last = rects[rects.length - 1] ?? first;
+        const below = last.bottom + 12;
+        const y = below + 52 < window.innerHeight ? below : Math.max(8, first.top - 60);
+        const x = Math.min(window.innerWidth - 120, Math.max(120, (first.left + last.right) / 2));
+        setSelBar({ x, y });
+      }, 180);
+    };
+    document.addEventListener('selectionchange', onSelection);
+    return () => {
+      document.removeEventListener('selectionchange', onSelection);
+      window.clearTimeout(timer);
+    };
+  }, [ready]);
+
   // Android: «Назад» закрывает сноску, панель или книгу, а не всю «Полку».
   const onBack = useRef(() => undefined as void);
   onBack.current = () => {
@@ -558,6 +672,12 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     }
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return;
+    // Касание сняло выделение — страницу не листаем.
+    if (hadSelection.current) {
+      hadSelection.current = false;
+      setSelBar(null);
+      return;
+    }
     const link = (e.target as HTMLElement).closest('[data-to],[data-ext]') as HTMLElement | null;
     if (link && flowRef.current?.contains(link)) {
       follow(link);
@@ -574,8 +694,13 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     else setBars(true);
   };
 
+  const onPointerDown = () => {
+    const sel = window.getSelection();
+    hadSelection.current = !!sel && !sel.isCollapsed;
+  };
   const onTouchStart = (e: ReactTouchEvent) => {
-    if (e.touches.length !== 1 || panel || note) return;
+    const sel = window.getSelection();
+    if (e.touches.length !== 1 || panel || note || (sel && !sel.isCollapsed)) return;
     touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
   };
   const onTouchMove = (e: ReactTouchEvent) => {
@@ -605,18 +730,94 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     turn(d > 0 ? 1 : -1);
   };
 
-  const runSearch = async (e: FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    if (q.length < 2) return;
+  const toggleBookmark = async () => {
+    const p = pager.current;
+    const v = bookRef.current;
+    if (!p || !v?.title) return;
+    try {
+      if (here) {
+        await api.markDelete(here.id);
+        setMarks((l) => l.filter((m) => m.id !== here.id));
+        nav.toast('Закладка убрана');
+        return;
+      }
+      const { chapter: ch, offset } = cur.current;
+      const m = await api.markSave({ id: '', title: v.title.id, book: hash, kind: 'bookmark', chapter: ch, offset, end: 0, text: p.textFrom(offset, 140), note: '', percent: Math.round(percentAt(ch, offset, p.length) * 10) / 10, created: 0 });
+      setMarks((l) => [...l, m]);
+      nav.toast('Закладка поставлена');
+    } catch (e) {
+      nav.toast(message(e));
+    }
+  };
+
+  /** Где выделение в главе: знаки от начала текста главы. */
+  const selectionSpot = () => {
+    const sel = selRange.current;
+    const flow = flowRef.current;
+    if (!sel || !flow || !flow.contains(sel.range.commonAncestorContainer)) return null;
+    const pre = document.createRange();
+    pre.selectNodeContents(flow);
+    pre.setEnd(sel.range.startContainer, sel.range.startOffset);
+    const offset = pre.toString().length;
+    const end = offset + sel.range.toString().length;
+    const text = sel.text.replace(/[ \t\u00a0]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+    return end > offset && text ? { offset, end, text } : null;
+  };
+  const dropSelection = () => {
+    window.getSelection()?.removeAllRanges();
+    selRange.current = null;
+    setSelBar(null);
+  };
+  const saveQuote = async () => {
+    const place = selectionSpot();
+    const v = bookRef.current;
+    const p = pager.current;
+    if (!place || !v?.title || !p) return dropSelection();
+    try {
+      const m = await api.markSave({ id: '', title: v.title.id, book: hash, kind: 'quote', chapter: cur.current.chapter, offset: place.offset, end: place.end, text: place.text, note: '', percent: Math.round(percentAt(cur.current.chapter, place.offset, p.length) * 10) / 10, created: 0 });
+      setMarks((l) => [...l, m]);
+      dropSelection();
+      nav.toast('Цитата сохранена — она и в карточке книги');
+    } catch (e) {
+      nav.toast(message(e));
+    }
+  };
+  const searchSelection = () => {
+    const place = selectionSpot();
+    dropSelection();
+    if (!place) return;
+    const q = place.text.replace(/\s+/g, ' ').slice(0, 200);
+    setQuery(q);
+    setPanel('search');
+    find(q);
+  };
+  const removeMark = async (m: Mark) => {
+    if (confirmId !== m.id) return setConfirmId(m.id);
+    setConfirmId(null);
+    try {
+      await api.markDelete(m.id);
+      setMarks((l) => l.filter((x) => x.id !== m.id));
+    } catch (e) {
+      nav.toast(message(e));
+    }
+  };
+
+  const find = async (q: string) => {
+    if (q.trim().length < 2) return;
     setSearching(true);
     try {
-      setHits(await api.bookSearch(hash, q));
+      setHits(await api.bookSearch(hash, q.trim()));
     } catch (err) {
       nav.toast(message(err));
     } finally {
       setSearching(false);
     }
+  };
+  const runSearch = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (q.length < 2) return;
+    await find(q);
   };
 
   const finish = async () => {
@@ -644,6 +845,9 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
   };
   const set = (patch: Partial<ReaderSettings>) => setLook((l) => ({ ...l, ...patch }));
 
+  const byPlace = (a: Mark, b: Mark) => a.chapter - b.chapter || a.offset - b.offset;
+  const bookmarks = marks.filter((m) => m.kind === 'bookmark' && m.book === hash).sort(byPlace);
+  const quotes = marks.filter((m) => m.kind === 'quote' && m.book === hash).sort(byPlace);
   const theme = THEMES[resolveTheme(look.theme)];
   const style = {
     '--rd-bg': theme.bg,
@@ -682,11 +886,16 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
 
   return (
     <div className={`reader theme-${resolveTheme(look.theme)}`} style={style}>
-      <div className="rd-page" onClick={onPaneClick} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
+      <div className="rd-page" onPointerDown={onPointerDown} onClick={onPaneClick} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
         <div className="rd-view" ref={paneRef}>
           <div ref={flowRef} className="rd-flow" lang={view?.meta.lang || 'ru'} />
         </div>
       </div>
+      {here && !bars && (
+        <svg className="rd-ribbon" viewBox="0 0 24 24" aria-label="Закладка на этой странице" role="img">
+          <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" />
+        </svg>
+      )}
       <div className="rd-status" aria-hidden={bars}>
         <span className="rd-status-title">{chapterTitle}</span>
         <span className="num">{ready ? `${page + 1} / ${pages} · ${pct(percent)}` : ''}</span>
@@ -711,7 +920,15 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
             <b>{t?.title || view.meta.title}</b>
             <span>{(t?.creators.length ? t.creators : view.meta.authors).join(', ')}</span>
           </div>
-          <button type="button" className="icon-btn" aria-label="Оглавление" onClick={() => setPanel('toc')}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Оглавление, закладки и цитаты"
+            onClick={() => {
+              setTab('toc');
+              setPanel('toc');
+            }}
+          >
             <Icon name="toc" />
           </button>
           <button type="button" className="icon-btn" aria-label="Поиск по книге" onClick={() => setPanel('search')}>
@@ -720,6 +937,11 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
           <button type="button" className="icon-btn" aria-label="Вид страницы" onClick={() => setPanel('look')}>
             <Icon name="type" />
           </button>
+          {t && (
+            <button type="button" className={`icon-btn rd-mark-btn${here ? ' on' : ''}`} aria-label={here ? 'Убрать закладку' : 'Закладка на этой странице'} aria-pressed={!!here} onClick={toggleBookmark}>
+              <Icon name="want" />
+            </button>
+          )}
         </div>
       )}
       {bars && view && (
@@ -760,6 +982,20 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
         </button>
       )}
 
+      {selBar && t && (
+        <div className="rd-selbar" style={{ left: selBar.x, top: selBar.y }} onPointerDown={(e) => e.preventDefault()}>
+          <button type="button" onClick={saveQuote}>
+            <Icon name="quote" size={16} />
+            <span>В цитаты</span>
+          </button>
+          <button type="button" onClick={searchSelection}>
+            <Icon name="search" size={16} />
+            <span>Искать</span>
+          </button>
+        </div>
+      )}
+      {quotePic && t && <QuotePicture t={t} mark={quotePic} nav={nav} onClose={() => setQuotePic(null)} />}
+
       {note && (
         <Sheet title="Сноска" onClose={() => setNote(null)}>
           <div
@@ -785,8 +1021,35 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
       )}
 
       {panel === 'toc' && view && (
-        <Sheet title="Оглавление" side onClose={() => setPanel(null)}>
-          {view.toc.length ? (
+        <Sheet title={tab === 'toc' ? 'Оглавление' : tab === 'bookmarks' ? 'Закладки' : 'Цитаты'} side onClose={() => setPanel(null)}>
+          {t && (
+            <Seg
+              cols
+              small
+              label="Раздел"
+              value={tab}
+              options={[
+                ['toc', 'Оглавление'],
+                ['bookmarks', `Закладки${bookmarks.length ? ` ${bookmarks.length}` : ''}`],
+                ['quotes', `Цитаты${quotes.length ? ` ${quotes.length}` : ''}`],
+              ]}
+              onChange={(v) => {
+                setTab(v);
+                setConfirmId(null);
+              }}
+            />
+          )}
+          {tab !== 'toc' ? (
+            <MarkList
+              list={tab === 'bookmarks' ? bookmarks : quotes}
+              empty={tab === 'bookmarks' ? 'Закладок пока нет. Поставить — значок закладки вверху, когда открыты панели.' : 'Цитат пока нет. Выделите текст в книге и нажмите «В цитаты».'}
+              where={(m) => `${view.chapters[m.chapter]?.title || `Глава ${m.chapter + 1}`} · ${pct(m.percent)}`}
+              confirmId={confirmId}
+              onOpen={(m) => jump(m.chapter, m.kind === 'quote' ? { hit: { offset: m.offset, len: m.end - m.offset } } : { offset: m.offset })}
+              onShare={(m) => setQuotePic(m)}
+              onRemove={removeMark}
+            />
+          ) : view.toc.length ? (
             <ol className="rd-toc" ref={tocRef}>
               {view.toc.map((it, i) => (
                 <li key={i}>

@@ -94,6 +94,11 @@ export function demoChapter(i: number): BookNode[] {
   return JSON.parse(JSON.stringify(c));
 }
 
+/** Где в главе начинается фраза (для демо-цитаты). */
+export function demoOffset(chapter: number, phrase: string): number {
+  return Math.max(0, textOf(CHAPTERS[chapter] ?? []).indexOf(phrase));
+}
+
 /** Поиск по демо-книге — как в ядре: без регистра и разницы «е» и «ё». */
 export function demoSearch(query: string) {
   const fold = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/ /g, ' ');

@@ -320,15 +320,43 @@ fn paths_inside_the_book() {
 
 #[test]
 fn reading_record_checks() {
-    let ok = Reading { title: "abc".into(), book: "a".repeat(64), chapter: 3, offset: 120, percent: 45.5, at: 1, minutes: 30 };
+    let ok = Reading { title: "abc".into(), book: "a".repeat(64), chapter: 3, offset: 120, percent: 45.5, at: 1, minutes: 30, years: [("2026".to_string(), 30)].into() };
     assert!(ok.check().is_ok());
     assert!(Reading { book: "xyz".into(), ..ok.clone() }.check().is_err());
     assert!(Reading { percent: 101.0, ..ok.clone() }.check().is_err());
     assert!(Reading { percent: f32::NAN, ..ok.clone() }.check().is_err());
     assert!(Reading { title: String::new(), ..ok.clone() }.check().is_err());
+    assert!(Reading { years: [("26".to_string(), 1)].into(), ..ok.clone() }.check().is_err());
     // Старые записи без минут читаются.
     let old: Reading = serde_json::from_str(&format!(r#"{{"title":"a","book":"{}","chapter":0,"offset":0,"percent":0,"at":0}}"#, "b".repeat(64))).unwrap();
-    assert_eq!(old.minutes, 0);
+    assert_eq!((old.minutes, old.years.len()), (0, 0));
+}
+
+#[test]
+fn marks_check() {
+    let quote = Mark {
+        id: "0123456789abcdef".into(),
+        title: "t1".into(),
+        book: "c".repeat(64),
+        kind: MarkKind::Quote,
+        chapter: 2,
+        offset: 10,
+        end: 40,
+        text: "Мой свет — простое «не напрасно»".into(),
+        note: String::new(),
+        percent: 36.5,
+        created: 1,
+    };
+    assert!(quote.check().is_ok());
+    assert!(Mark { end: 10, ..quote.clone() }.check().is_err(), "пустая цитата");
+    assert!(Mark { text: "  ".into(), ..quote.clone() }.check().is_err());
+    assert!(Mark { text: "я".repeat(4001), ..quote.clone() }.check().is_err());
+    assert!(Mark { id: "../x".into(), ..quote.clone() }.check().is_err());
+    let bookmark = Mark { kind: MarkKind::Bookmark, end: 0, text: String::new(), ..quote.clone() };
+    assert!(bookmark.check().is_ok());
+    let json = serde_json::to_string(&bookmark).unwrap();
+    assert!(json.contains(r#""kind":"bookmark""#) && !json.contains("note") && !json.contains("text"));
+    assert_eq!(serde_json::from_str::<Mark>(&json).unwrap(), bookmark);
 }
 
 /// Случайная разметка не роняет разбор: срезы строк только по границам знаков.

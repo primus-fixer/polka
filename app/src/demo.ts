@@ -1,6 +1,6 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, LocalBook, Reading, Season, Status, Title, YearStats } from './api';
-import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoSearch } from './demoBook';
+import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, LocalBook, Mark, Reading, Season, Status, Title, YearStats } from './api';
+import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoOffset, demoSearch } from './demoBook';
 import { todayIso } from './format';
 
 export { demoBookImageSrc as demoBookImage } from './demoBook';
@@ -54,8 +54,20 @@ let readings: Reading[] = [
     percent: Math.round(((demoView.chapters[0].size + demoView.chapters[1].size) / demoView.total) * 1000) / 10,
     at: Math.floor(Date.now() / 1000) - 20 * 3600,
     minutes: 9,
+    years: { [String(new Date().getFullYear())]: 9 },
   },
 ];
+// Цитата и закладка в демо-книге.
+const POEM = 'Мой свет — простое «не напрасно» в конце неласковых морей.';
+const poemAt = demoOffset(2, 'Мой свет — простое');
+const poemEnd = demoOffset(2, 'в конце неласковых морей.') + 'в конце неласковых морей.'.length;
+const pctAt = (chapter: number, offset: number) =>
+  Math.round(((demoView.chapters.slice(0, chapter).reduce((a, c) => a + c.size, 0) + offset) / demoView.total) * 1000) / 10;
+let marks: Mark[] = [
+  { id: 'demoquote1', title: DEMO_TITLE, book: DEMO_BOOK, kind: 'quote', chapter: 2, offset: poemAt, end: poemEnd, text: POEM, percent: pctAt(2, poemAt), created: Math.floor(Date.now() / 1000) - 19 * 3600 },
+  { id: 'demomark1', title: DEMO_TITLE, book: DEMO_BOOK, kind: 'bookmark', chapter: 1, offset: 0, end: 0, text: 'Остров был так мал, что его не каждая карта соглашалась показывать…', percent: 2, created: Math.floor(Date.now() / 1000) - 20 * 3600 },
+];
+let nextMark = 1;
 const NO_FILES = 'В демо файлы книг не открываются — это работает в приложении. Попробуйте «Смотритель маяка» на полке.';
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -401,6 +413,16 @@ export const demo: Api = {
   readings: async () => clone(readings),
   readingSave: async (r) => {
     readings = readings.filter((x) => x.title !== r.title).concat(clone(r));
+  },
+  marks: async (title) => clone(marks.filter((m) => !title || m.title === title).sort((a, b) => a.chapter - b.chapter || a.offset - b.offset)),
+  markSave: async (m) => {
+    const x: Mark = { ...clone(m), id: m.id || `demomark${++nextMark}`, created: m.created || Math.floor(Date.now() / 1000) };
+    if (x.kind === 'quote' && !(x.text ?? '').trim()) throw new Error('Цитата пустая — выделите текст');
+    marks = marks.filter((y) => y.id !== x.id).concat(x);
+    return clone(x);
+  },
+  markDelete: async (id) => {
+    marks = marks.filter((m) => m.id !== id);
   },
   openLink: async (url) => {
     window.open(url, '_blank', 'noopener');

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { Nav } from '../App';
+import type { Library, Nav } from '../App';
 import { api, message, type Title, type YearStats } from '../api';
 import { daysLeftInYear, decimal, MONTH_LETTERS, plural, thousands, todayIso, yearOf } from '../format';
 import { Bar, Cover, Icon } from '../ui';
 import { kindLabel } from './Home';
 import YearPicture from './YearPicture';
 
-export default function Stats({ titles, nav }: { titles: Title[]; nav: Nav }) {
+export default function Stats({ titles, nav, library }: { titles: Title[]; nav: Nav; library: Library }) {
   const thisYear = yearOf(todayIso());
   const [year, setYear] = useState(thisYear);
   const [s, setS] = useState<YearStats | null>(null);
@@ -34,6 +34,9 @@ export default function Stats({ titles, nav }: { titles: Title[]; nav: Nav }) {
     ['Средняя оценка', s.avg_rating ? decimal(s.avg_rating) : '—'],
   ];
   if (s.audio_minutes) figures.splice(1, 0, ['Часов аудиокниг', String(Math.round(s.audio_minutes / 60))]);
+  // Время в читалке «Полки» за этот год — со всех устройств.
+  const readMinutes = library.readings.reduce((a, r) => a + (r.years?.[String(year)] ?? 0), 0);
+  if (readMinutes > 0) figures.splice(1, 0, ['Часов в читалке', readMinutes < 600 ? decimal(Math.round(readMinutes / 6) / 10) : String(Math.round(readMinutes / 60))]);
   if (s.dropped) figures.push(['Брошено', String(s.dropped)]);
   const best = s.best.map((id) => titles.find((t) => t.id === id)).filter((t): t is Title => !!t);
   const genreMax = Math.max(1, ...s.genres.map((g) => g.n));

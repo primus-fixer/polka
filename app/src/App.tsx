@@ -15,6 +15,8 @@ import Want from './screens/Want';
 
 // Читалка — отдельным куском: её код и шрифт грузятся, только когда открывают книгу.
 const Reader = lazy(() => import('./screens/Reader'));
+/** Открыть книгу сразу на месте (цитата из карточки): глава, знак, длина подсветки. */
+export type ReaderAt = { chapter: number; offset: number; len: number };
 
 export type Route =
   | { name: 'home' }
@@ -23,7 +25,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'add'; replace?: string; shared?: string }
   | { name: 'card'; id: string }
-  | { name: 'reader'; hash: string };
+  | { name: 'reader'; hash: string; at?: ReaderAt };
 
 export type Filter = 'all' | 'book' | 'screen';
 
@@ -36,8 +38,8 @@ export type Nav = {
   /** Вся полка заново — после восстановления из копии. */
   replaceAll: (list: Title[]) => void;
   toast: (text: string) => void;
-  /** Открыть книгу в читалке (по хешу файла). */
-  read: (hash: string) => void;
+  /** Открыть книгу в читалке (по хешу файла); `at` — сразу на этом месте. */
+  read: (hash: string, at?: ReaderAt) => void;
   /** Файл книги — на полку и в читалку; `title` — привязать к этой записи. */
   importBook: (file: File, title?: string) => void;
 };
@@ -221,9 +223,9 @@ export default function App() {
       removed: (id) => setTitles((ts) => ts.filter((x) => x.id !== id)),
       replaceAll: setTitles,
       toast: setToast,
-      read: (hash) => {
+      read: (hash, at) => {
         setHistory([...history.slice(-20), route]);
-        setRoute({ name: 'reader', hash });
+        setRoute({ name: 'reader', hash, at });
       },
       importBook: (file, title) => {
         setToast(`Открываю «${file.name}»…`);
@@ -247,8 +249,9 @@ export default function App() {
       <>
         <Suspense fallback={<div className="rd-wait">Открываю книгу…</div>}>
           <Reader
-            key={route.hash}
+            key={`${route.hash}-${route.at?.chapter ?? ''}-${route.at?.offset ?? ''}`}
             hash={route.hash}
+            at={route.at}
             nav={nav}
             titles={titles}
             onClose={(r) => {
@@ -278,7 +281,7 @@ export default function App() {
       <Home titles={titles} nav={nav} wide={wide} view={view} setView={setView} filter={filter} setFilter={setFilter} goal={goal} year={year} query={query} setQuery={setQuery} sort={sort} setSort={setSort} library={library} />
     );
   else if (route.name === 'want') body = <Want titles={titles} nav={nav} filter={filter} setFilter={setFilter} />;
-  else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} />;
+  else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} library={library} />;
   else if (route.name === 'settings')
     body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} onSynced={reload} nav={nav} />;
   else if (route.name === 'add') body = <Add key={route.shared ?? 'add'} titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} shared={route.shared} />;
