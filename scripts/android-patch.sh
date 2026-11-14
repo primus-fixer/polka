@@ -19,13 +19,17 @@ if [ -n "$ICONS" ] && [ -d "$ICONS" ]; then
   cp -r "$ICONS"/. "$MAIN/res/"
 fi
 
-# INTERNET уже есть в шаблоне, CAMERA добавляет модуль сканера штрихкодов.
+# INTERNET уже есть в шаблоне, CAMERA добавляет модуль сканера штрихкодов и QR-кодов.
 add_permission() {
   local name="$1"
   grep -q "android:name=\"$name\"" "$MANIFEST" && return 0
   sed -i "s#<application#<uses-permission android:name=\"$name\" />\n    <application#" "$MANIFEST"
 }
 add_permission android.permission.ACCESS_NETWORK_STATE
+# Обмен по Wi-Fi: состояние Wi-Fi, широковещательный поиск устройств в сети и доступ к локальной сети.
+add_permission android.permission.ACCESS_WIFI_STATE
+add_permission android.permission.CHANGE_WIFI_MULTICAST_STATE
+add_permission android.permission.ACCESS_LOCAL_NETWORK
 
 # Резервное копирование Android выключено: база зашифрована ключом из Keystore,
 # который на другой телефон не переносится, — копия там всё равно не откроется.

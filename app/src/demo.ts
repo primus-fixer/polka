@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, Found, Goal, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, Candidate, Found, Goal, LanView, Season, Status, Title, YearStats } from './api';
 import { todayIso } from './format';
 
 const base = { creators: [] as string[], tags: [] as string[], genres: [] as string[], seasons: [] as Season[], added: '2026-09-20' };
@@ -27,6 +27,8 @@ let titles: Title[] = [
   T({ id: 'chern', kind: 'series', title: 'Чернобыль', creators: ['Юхан Ренк'], year: '2019', status: 'want', added: '2026-10-28', seasons: seasons([5], [], '') }),
 ];
 let goal: Goal = { books: 24, screen: null };
+let lan: LanView = { name: 'Демо', hosts: ['192.168.1.34'], code: null, note: null, peers: [], nearby: [] };
+const QR_DEMO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1z" fill="none" stroke="#15232D" stroke-width="2"/><path d="M11 3h2v2h-2zM14 6h3v2h-3zM10 10h4v3h-4zM16 12h3v4h-3zM12 17h2v5h-2zM20 18h4v2h-4zM17 23h3v3h-3zM23 22h3v4h-3z" fill="#15232D"/></svg>';
 let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false };
 let next = 1;
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
@@ -266,4 +268,28 @@ export const demo: Api = {
   },
   backupDiscard: async () => {},
   onBackup: async () => () => undefined,
+  lanStatus: async () => clone(lan),
+  lanScan: async () => {
+    await wait(400);
+    return clone(lan);
+  },
+  lanCodeStart: async () => {
+    lan = { ...lan, code: { code: '6WVG-HEWK', secs: 300, left: 5, wrong: 0, qr_svg: QR_DEMO, hosts: lan.hosts, port: 47510 } };
+    return clone(lan);
+  },
+  lanCodeStop: async () => {
+    lan = { ...lan, code: null };
+    return clone(lan);
+  },
+  lanPair: async () => {
+    throw new Error('В демо обмен по Wi-Fi не работает');
+  },
+  lanPairQr: async () => {
+    throw new Error('В демо обмен по Wi-Fi не работает');
+  },
+  lanSyncNow: async () => {
+    throw new Error('В демо обмен по Wi-Fi не работает');
+  },
+  lanUnpair: async () => clone(lan),
+  onLan: async () => () => undefined,
 };

@@ -18,17 +18,23 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
 mod backup;
+mod lan;
 
 /// Версия «Полки» — пишется в резервные копии.
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct AppState {
-    store: Mutex<Store>,
+    /// База — общая с потоками обмена по Wi-Fi.
+    store: Arc<Mutex<Store>>,
     dir: PathBuf,
     keys: Mutex<Keys>,
     net: Arc<Net>,
-    /// Как называть это устройство в копиях: имя компьютера или «Телефон».
+    /// Номер этого устройства в журнале.
+    id: String,
+    /// Как называть это устройство в копиях и при связи: имя компьютера или «Телефон».
     name: String,
+    /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
+    lan: lan::Lan,
 }
 
 impl AppState {
@@ -436,8 +442,9 @@ pub fn run() {
             let store = Store::open(&db, &key, &me.id).map_err(err)?;
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
-            app.manage(AppState { store: Mutex::new(store), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), name: device_name() });
+            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
             backup::start_auto(app.handle().clone());
+            lan::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -468,6 +475,14 @@ pub fn run() {
             backup::backup_inspect,
             backup::backup_restore,
             backup::backup_discard,
+            lan::lan_status,
+            lan::lan_scan,
+            lan::lan_code_start,
+            lan::lan_code_stop,
+            lan::lan_pair,
+            lan::lan_pair_qr,
+            lan::lan_sync_now,
+            lan::lan_unpair,
         ])
         .run(tauri::generate_context!())
         .expect("«Полка» не запустилась");

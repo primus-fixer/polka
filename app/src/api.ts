@@ -118,6 +118,17 @@ export type BackupStatus = {
 export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; bytes: number };
 export type RestoreResult = { events: number; blobs: number; titles: number; list: Title[] };
 
+/** Показанный код связи: «6WVG-HEWK», сколько секунд ещё действует, сколько попыток осталось; QR — код и адрес для телефона. */
+export type LanCode = { code: string; secs: number; left: number; wrong: number; qr_svg: string; hosts: string[]; port: number };
+/** Связанное устройство: в сети ли, идёт ли обмен, последний обмен (unix), версия, почему не получился обмен. */
+export type LanPeer = { id: string; name: string; online: boolean; syncing: boolean; last: number | null; app: string; error: string | null };
+/** Устройство рядом в сети с показанным кодом. */
+export type LanNearby = { device: string; name: string; addr: string };
+export type LanView = { name: string; hosts: string[]; code: LanCode | null; note: string | null; peers: LanPeer[]; nearby: LanNearby[] };
+/** Связь по коду или обмен: с кем, сколько ушло и пришло. */
+export type PairResult = { peer_name: string; sent: number; received: number; files_sent: number; files_received: number; hint: string; remembered: boolean };
+export type LanEvent = { received: number; paired: string | null };
+
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
 
@@ -166,6 +177,21 @@ const real = {
   backupInspect: (id: string, password: string) => invoke<BackupInfo>('backup_inspect', { id, password }),
   backupRestore: (id: string, password: string) => invoke<RestoreResult>('backup_restore', { id, password }),
   backupDiscard: (id: string) => invoke<void>('backup_discard', { id }),
+  lanStatus: () => invoke<LanView>('lan_status'),
+  /** Поискать в сети сейчас (около секунды). */
+  lanScan: () => invoke<LanView>('lan_scan'),
+  lanCodeStart: () => invoke<LanView>('lan_code_start'),
+  lanCodeStop: () => invoke<LanView>('lan_code_stop'),
+  /** Связь по коду: с найденным устройством или по адресу. */
+  lanPair: (device: string | null, addr: string | null, code: string) => invoke<PairResult>('lan_pair', { device, addr, code }),
+  lanPairQr: (uri: string) => invoke<PairResult>('lan_pair_qr', { uri }),
+  lanSyncNow: (id: string) => invoke<PairResult>('lan_sync_now', { id }),
+  lanUnpair: (id: string) => invoke<LanView>('lan_unpair', { id }),
+  /** Обмен по Wi-Fi или связь по коду: `received` — сколько нового пришло. */
+  onLan: async (listener: (e: LanEvent) => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<LanEvent>('lan', (ev) => listener(ev.payload));
+  },
   /** Автокопия сделана или не получилась — обновить раздел копий. */
   onBackup: async (listener: () => void): Promise<() => void> => {
     const { listen } = await import('@tauri-apps/api/event');
@@ -183,6 +209,16 @@ export function coverSrc(id: string): string | null {
   if (inApp) return convertFileSrc(id, 'cover');
   // Демо в браузере: обложка — сама картинка (data:).
   return id.startsWith('data:') ? id : null;
+}
+
+/** Сканирование QR-кода связи камерой телефона. */
+export async function scanQr(): Promise<string> {
+  const scanner = await import('@tauri-apps/plugin-barcode-scanner');
+  let perm = await scanner.checkPermissions();
+  if (perm !== 'granted') perm = await scanner.requestPermissions();
+  if (perm !== 'granted') throw new Error('Нет доступа к камере. Разрешите его в настройках телефона');
+  const res = await scanner.scan({ windowed: false, formats: [scanner.Format.QRCode] });
+  return res.content;
 }
 
 /** Сканирование штрихкода книги (EAN-13) камерой телефона. */
