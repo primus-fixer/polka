@@ -139,13 +139,13 @@ p {
   overflow-y: auto;
 }
 
-/* Логотип — по центру над кнопкой «Добавить». */
+/* Логотип — крупно и по центру над кнопкой «Добавить». */
 .wordmark {
-  margin: 0 0 24px;
+  margin: 4px 0 26px;
   text-align: center;
   font-weight: 500;
-  font-size: 44px;
-  line-height: 50px;
+  font-size: 60px;
+  line-height: 66px;
   letter-spacing: -0.015em;
 }
 
