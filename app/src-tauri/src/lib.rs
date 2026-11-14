@@ -424,6 +424,7 @@ fn cover_bytes(state: State<AppState>, id: String) -> Res<tauri::ipc::Response> 
 }
 
 /// Имя файла без знаков, которые Windows не принимает.
+#[cfg_attr(not(desktop), allow(dead_code))]
 fn file_name(name: &str) -> String {
     let clean: String = name.chars().filter(|c| !c.is_control() && !r#"<>:"/\|?*"#.contains(*c)).collect();
     let clean = clean.trim().trim_end_matches('.').to_string();
