@@ -1,0 +1,37 @@
+# Тестовый список для проверки обложек (этап 0).
+# Строка — «Название — Автор». Замените своими книгами, если хотите.
+# Язык определяется сам: есть кириллица — русское издание.
+
+# Русские издания
+Пикник на обочине — Аркадий и Борис Стругацкие
+Мастер и Маргарита — Михаил Булгаков
+Лавр — Евгений Водолазкин
+Generation «П» — Виктор Пелевин
+Зулейха открывает глаза — Гузель Яхина
+Метро 2033 — Дмитрий Глуховский
+Азазель — Борис Акунин
+Обитель — Захар Прилепин
+Отцы и дети — Иван Тургенев
+Три товарища — Эрих Мария Ремарк
+Щегол — Донна Тартт
+Sapiens. Краткая история человечества — Юваль Ной Харари
+Тонкое искусство пофигизма — Марк Мэнсон
+Код. Тайный язык информатики — Чарльз Петцольд
+Совершенный код — Стив Макконнелл
+
+# На английском
+Project Hail Mary — Andy Weir
+Dune — Frank Herbert
+Atomic Habits — James Clear
+The Pragmatic Programmer — Andrew Hunt
+Sapiens — Yuval Noah Harari
+The Three-Body Problem — Cixin Liu
+Educated — Tara Westover
+Klara and the Sun — Kazuo Ishiguro
+The Name of the Wind — Patrick Rothfuss
+Thinking, Fast and Slow — Daniel Kahneman
+Tomorrow, and Tomorrow, and Tomorrow — Gabrielle Zevin
+Children of Time — Adrian Tchaikovsky
+The Rust Programming Language — Steve Klabnik
+1984 — George Orwell
+Piranesi — Susanna Clarke

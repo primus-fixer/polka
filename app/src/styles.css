@@ -1,0 +1,1281 @@
+/* Вид «Полки» — как у «Кармана». Цвета задаются переменными (theme.ts). */
+:root {
+  --bg: #eef2f3;
+  --surf: #f9fbfb;
+  --inset: #e3e9eb;
+  --ink: #15232d;
+  --ink2: #3f4f5a;
+  --ink3: #566671;
+  --line: #cdd6da;
+  --work: #a64a08;
+  --workBg: #f7e6d8;
+  --onWork: #ffffff;
+  --own: #0e5a8a;
+  --ownBg: #dceaf3;
+  --onOwn: #ffffff;
+  --pos: #0b6b57;
+  --warn: #a4262c;
+  --warnBg: #f8e3e1;
+  --serOwn: #0e5a8a;
+  --serWork: #a64a08;
+  --num: 'Geologica', 'Golos Text', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 21px;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--own);
+  outline-offset: 2px;
+}
+
+p {
+  margin: 0;
+}
+
+.num {
+  font-family: var(--num);
+}
+
+.small {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.muted {
+  color: var(--ink2);
+}
+
+.muted3 {
+  color: var(--ink3);
+}
+
+.ink {
+  color: var(--ink);
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+/* Раскладка: телефон — нижняя панель, компьютер — меню слева. */
+.app.phone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app.wide {
+  display: flex;
+  height: 100%;
+}
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.inner {
+  padding: max(16px, env(safe-area-inset-top)) 20px 40px;
+}
+
+.inner.with-fab {
+  padding-bottom: 120px;
+}
+
+.app.wide .inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+}
+
+.side {
+  flex: 0 0 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 28px 14px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.wordmark {
+  margin: 0 0 24px 12px;
+  font-weight: 500;
+  font-size: 44px;
+  line-height: 50px;
+  letter-spacing: -0.015em;
+}
+
+.side-add {
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+
+.navitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink2);
+  text-align: left;
+}
+
+.navitem.on {
+  background: var(--inset);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.bottomnav {
+  flex: none;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  padding: 4px 4px max(6px, env(safe-area-inset-bottom));
+  background: var(--surf);
+  border-top: 1px solid var(--line);
+}
+
+.bottomnav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bottomnav button.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.fab {
+  position: absolute;
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  z-index: 3;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  z-index: 10;
+  transform: translateX(-50%);
+  width: min(360px, calc(100% - 40px));
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 14px;
+  line-height: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.app.wide .toast {
+  bottom: 32px;
+}
+
+/* Общие блоки. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.stack-s {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.screen-title {
+  margin: 0;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+}
+
+.sec {
+  margin: 0 0 8px;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.sec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.sec-head .sec {
+  margin-bottom: 8px;
+}
+
+.label {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--ink2);
+}
+
+.label.big {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.lines .title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lines .title.wrap {
+  white-space: normal;
+}
+
+.lines .sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.row.block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.row-val {
+  text-align: right;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--inset);
+  overflow: hidden;
+}
+
+.bar.thick {
+  height: 7px;
+  border-radius: 4px;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+}
+
+/* Кнопки. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--inset);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.btn.primary {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.btn.work {
+  background: var(--work);
+  color: var(--onWork);
+  min-height: 48px;
+}
+
+.btn.warn {
+  background: var(--warn);
+  color: #fff;
+}
+
+.btn.line {
+  border: 1px solid var(--line);
+  background: none;
+}
+
+.btn.soft {
+  background: var(--inset);
+}
+
+.btn.small {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.btn.big {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  font-weight: 600;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--own);
+  font-weight: 500;
+}
+
+.link-btn.warn-text {
+  color: var(--warn);
+}
+
+.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Переключатели. */
+.seg {
+  display: grid;
+  gap: 2px;
+  padding: 3px;
+  background: var(--inset);
+  border-radius: 12px;
+}
+
+.seg button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink2);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.seg.small button {
+  padding: 0 8px;
+  font-size: 14px;
+}
+
+.seg button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.seg .icon-seg {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  padding: 0;
+}
+
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1.5px solid transparent;
+  border-radius: 11px;
+  background: var(--inset);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.chip.sel {
+  border-color: var(--own);
+  background: var(--ownBg);
+  color: var(--own);
+}
+
+.chip-add input {
+  width: 120px;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1.5px dashed var(--line);
+  border-radius: 11px;
+  background: transparent;
+  font-size: 14px;
+}
+
+.ratings {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ratings button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--inset);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.ratings button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field > span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink2);
+}
+
+.field input,
+.note,
+.add-season input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surf);
+  color: var(--ink);
+}
+
+.note {
+  padding: 10px 12px;
+  resize: vertical;
+  line-height: 21px;
+}
+
+.row-field {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 0 0 14px;
+  border-radius: 12px;
+  background: var(--inset);
+}
+
+.row-field input {
+  width: auto;
+  border: 0;
+  background: none;
+}
+
+.inline-num {
+  width: 90px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surf);
+  text-align: right;
+}
+
+/* Обложки. */
+.cover {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--inset);
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover.grid {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+}
+
+.cover.hero {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+}
+
+.cover.mini {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 60px;
+  border-radius: 4px;
+}
+
+.cover.pick {
+  width: 104px;
+  height: 156px;
+}
+
+.cover.ph {
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 9px;
+  text-align: left;
+}
+
+.cover.hero.ph {
+  padding: 14px 12px;
+}
+
+.ph-line {
+  display: block;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+}
+
+.ph-title {
+  display: block;
+  max-height: 64px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 16px;
+  letter-spacing: -0.01em;
+}
+
+.cover.hero .ph-title {
+  max-height: none;
+  font-size: 18px;
+  line-height: 21px;
+}
+
+.ph-by {
+  display: block;
+  font-size: 10.5px;
+  line-height: 13px;
+  opacity: 0.85;
+}
+
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+}
+
+/* Полка, лента, «Сейчас». */
+.now {
+  display: grid;
+  column-gap: 24px;
+}
+
+.now-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 76px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.now-open,
+.feed-row,
+.result-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.feed-row {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.result-row {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.feed-row .right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.rating {
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--inset);
+  color: var(--ink2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.shelf {
+  display: grid;
+  gap: 18px 12px;
+}
+
+.shelf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.shelf-item .lines .title {
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.goal-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.goal-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink2);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Добавление. */
+.topbar {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
+  margin: -8px -10px -6px;
+}
+
+.topbar-title {
+  margin: 0;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 4px 0 14px;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  border: 0;
+  outline: 0;
+  background: none;
+}
+
+.methods {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.methods button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--inset);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.foot-note {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  margin: 0 -20px;
+  padding: 4px 20px 6px;
+}
+
+.pick-tile {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 104px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.pick-tile .cover {
+  margin-bottom: 5px;
+  outline: 2.5px solid transparent;
+  outline-offset: 2px;
+}
+
+.pick-tile.sel .cover {
+  outline-color: var(--ink);
+}
+
+.tick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.cap {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.save-bar {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -20px -40px;
+  padding: 12px 20px max(16px, env(safe-area-inset-bottom));
+  background: var(--surf);
+  border-top: 1px solid var(--line);
+}
+
+.app.wide .save-bar {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.app.wide .save-bar .btn {
+  width: auto;
+  min-width: 280px;
+}
+
+.edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surf);
+}
+
+/* Карточка. */
+.hero {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kind-chip {
+  align-self: flex-start;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.kind-chip.own {
+  background: var(--ownBg);
+  color: var(--own);
+}
+
+.kind-chip.work {
+  background: var(--workBg);
+  color: var(--work);
+}
+
+.card-title {
+  margin: 0;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 27px;
+  letter-spacing: -0.01em;
+}
+
+.ratings-line {
+  font-weight: 500;
+}
+
+.ratings-line .small {
+  display: block;
+  font-weight: 400;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 16px;
+}
+
+.dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.season {
+  border-top: 1px solid var(--line);
+}
+
+.season-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.season-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.season-body {
+  padding: 2px 0 8px;
+}
+
+.eps {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ep {
+  height: 44px;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink2);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.ep.seen {
+  border-color: var(--work);
+  background: var(--work);
+  color: var(--onWork);
+}
+
+.ep.next {
+  border-color: var(--work);
+  color: var(--work);
+}
+
+.add-season {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.danger {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* Итоги. */
+.year-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 17px;
+}
+
+.hero-num {
+  font-weight: 300;
+  font-size: 54px;
+  line-height: 62px;
+  letter-spacing: -0.025em;
+}
+
+.hero-num-small {
+  font-size: 26px;
+  letter-spacing: -0.01em;
+  color: var(--ink2);
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.figure {
+  font-size: 24px;
+  line-height: 30px;
+  letter-spacing: -0.01em;
+}
+
+.app.wide .figures {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.legend {
+  display: flex;
+  gap: 12px;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.chart {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  align-items: end;
+  height: 110px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chart-col {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+}
+
+.chart-col span {
+  width: 7px;
+  min-height: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.chart-labels {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--ink2);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.genre-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 28px;
+  gap: 10px;
+  align-items: center;
+  min-height: 40px;
+  border-top: 1px solid var(--line);
+}
+
+.genre-row .bar {
+  margin: 0;
+}
+
+.genre-row .num {
+  text-align: right;
+}
+
+.best {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* Настройки. */
+.schemes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.scheme {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 8px 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.scheme.on {
+  background: var(--inset);
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px transparent;
+}
+
+.scheme.on .swatch {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ink);
+}
+
+.key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.key-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@media (max-width: 370px) {
+  .seg.small button {
+    padding: 0 6px;
+    font-size: 13px;
+  }
+}

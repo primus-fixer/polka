@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Polka",
+  "mainBinaryName": "polka",
+  "version": "0.1.0",
+  "identifier": "io.github.primusfixer.polka",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Полка",
+        "width": 1100,
+        "height": 780,
+        "minWidth": 380,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob: https: http: cover: http://cover.localhost https://cover.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "shortDescription": "Полка — прочитанные книги, просмотренные фильмы и сериалы",
+    "longDescription": "Учёт прочитанных книг, просмотренных фильмов и сериалов: обложки подтягиваются сами из Open Library, Google Books, FantLab и ПоискКино, оценки, заметки, метки и итоги за год.",
+    "category": "Lifestyle",
+    "copyright": "primus-fixer",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "languages": [
+          "Russian",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

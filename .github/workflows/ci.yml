@@ -1,0 +1,94 @@
+name: Проверки
+
+on:
+  push:
+  workflow_dispatch:
+
+# Сборкам токен GitHub нужен только для чтения кода.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Ядро и мост — тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: core
+      - name: Библиотеки WebKit для моста Tauri
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libsoup-3.0-dev
+      - name: Интерфейс для моста (frontendDist)
+        working-directory: app
+        run: npm ci && npm run build
+      - run: cargo test -p polka-core -p polka-secure -p polka-app
+
+  frontend:
+    name: Интерфейс — сборка
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  audit:
+    name: Библиотеки — известные уязвимости
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: audit
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - name: Пакеты интерфейса
+        working-directory: app
+        run: npm audit --audit-level=moderate
+
+  covers:
+    name: Проверка обложек
+    # После каждого пуша в main и вручную (Run workflow).
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: covers
+      # Ключи — секретами: GOOGLE_BOOKS_KEY (без него Google Books не отвечает)
+      # и POISKKINO_KEY (без него фильмы пропускаются).
+      - name: Каталоги — 30 книг и 10 фильмов
+        env:
+          GOOGLE_BOOKS_KEY: ${{ secrets.GOOGLE_BOOKS_KEY }}
+          POISKKINO_KEY: ${{ secrets.POISKKINO_KEY }}
+        run: |
+          cargo run -q -p polka-core --example cover_check -- docs/cover-check-books.txt docs/cover-check-films.txt | tee cover-summary.txt
+          cat cover-summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: cover-report
+          path: |
+            cover-report.html
+            cover-report.json
+          retention-days: 14

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/polka-core", "crates/polka-secure", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[profile.release]
+strip = true
+
+# Шифрование базы в отладочной сборке иначе заметно тормозит.
+[profile.dev.package.sha2]
+opt-level = 3
