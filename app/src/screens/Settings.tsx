@@ -3,6 +3,7 @@ import type { Nav } from '../App';
 import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
+import BackupSection from './Backup';
 
 type Props = {
   scheme: string;
@@ -161,15 +162,17 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
       </section>
 
+      <BackupSection nav={nav} />
+
       <section className="stack-s">
         <h2 className="sec">Данные</h2>
         <p className="small muted">
-          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. Обмен по Wi-Fi и через Яндекс Диск и резервные копии — в следующем этапе.
+          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. Обмен по Wi-Fi и через Яндекс Диск — в следующих версиях.
         </p>
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.1.0</p>
+      <p className="small muted3">Полка 0.2.0</p>
     </div>
   );
 }

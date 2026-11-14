@@ -22,6 +22,11 @@ pub enum Error {
     NotFound(String),
     #[error("случайные числа недоступны: {0}")]
     Random(String),
+    /// Резервная копия: файл не подходит, повреждён или обрезан.
+    #[error("{0}")]
+    Backup(String),
+    #[error("Пароль не подходит к этой копии")]
+    BackupPassword,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

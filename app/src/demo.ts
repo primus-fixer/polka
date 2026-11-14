@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, Candidate, Found, Goal, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, Candidate, Found, Goal, Season, Status, Title, YearStats } from './api';
 import { todayIso } from './format';
 
 const base = { creators: [] as string[], tags: [] as string[], genres: [] as string[], seasons: [] as Season[], added: '2026-09-20' };
@@ -27,6 +27,7 @@ let titles: Title[] = [
   T({ id: 'chern', kind: 'series', title: 'Чернобыль', creators: ['Юхан Ренк'], year: '2019', status: 'want', added: '2026-10-28', seasons: seasons([5], [], '') }),
 ];
 let goal: Goal = { books: 24, screen: null };
+let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false };
 let next = 1;
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -234,4 +235,35 @@ export const demo: Api = {
     goal = g;
   },
   setKey: async () => {},
+  setTz: async () => {},
+  backupStatus: async () => clone(backup),
+  backupPassword: async (password) => {
+    if ([...password].length < 8) throw new Error('Пароль копии — не короче 8 символов');
+    backup = { ...backup, password: true };
+    return clone(backup);
+  },
+  backupEvery: async (every) => {
+    backup = { ...backup, every, keep: every === 'week' ? 8 : 14 };
+    return clone(backup);
+  },
+  backupDir: async () => clone(backup),
+  backupPickDir: async () => clone(backup),
+  backupNow: async () => {
+    await wait(700);
+    const at = Math.floor(Date.now() / 1000);
+    const last = { at, path: `${backup.dir}\\Полка копия.polka`, auto: false, bytes: 2_400_000, events: titles.length * 3, blobs: 4 };
+    backup = { ...backup, last, shared: `${at}|Демо` };
+    return clone(last);
+  },
+  backupUpload: async () => {
+    throw new Error('В демо восстановление из копии не работает');
+  },
+  backupInspect: async () => {
+    throw new Error('В демо восстановление из копии не работает');
+  },
+  backupRestore: async () => {
+    throw new Error('В демо восстановление из копии не работает');
+  },
+  backupDiscard: async () => {},
+  onBackup: async () => () => undefined,
 };

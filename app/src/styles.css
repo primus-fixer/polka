@@ -1279,3 +1279,40 @@ p {
     font-size: 13px;
   }
 }
+
+/* Резервная копия */
+.restore {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--surf);
+}
+
+.restore-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.restore-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.backup-sub {
+  display: block;
+}
+
+.row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.backup-dir {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

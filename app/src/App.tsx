@@ -26,6 +26,8 @@ export type Nav = {
   /** Запись изменилась (или добавилась) — заменить в списке. */
   update: (t: Title) => void;
   removed: (id: string) => void;
+  /** Вся полка заново — после восстановления из копии. */
+  replaceAll: (list: Title[]) => void;
   toast: (text: string) => void;
 };
 
@@ -91,6 +93,8 @@ export default function App() {
   }, [year]);
 
   useEffect(() => {
+    // Смещение местного времени — для имён резервных копий.
+    api.setTz(-new Date().getTimezoneOffset()).catch(() => undefined);
     api
       .titles()
       .then(setTitles)
@@ -118,6 +122,7 @@ export default function App() {
       },
       update: (t) => setTitles((ts) => (ts.some((x) => x.id === t.id) ? ts.map((x) => (x.id === t.id ? t : x)) : [...ts, t])),
       removed: (id) => setTitles((ts) => ts.filter((x) => x.id !== id)),
+      replaceAll: setTitles,
       toast: setToast,
     }),
     [route, history],

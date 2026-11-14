@@ -98,6 +98,29 @@ export type YearStats = {
 
 export type Settings = { goal: Goal; has_poiskkino: boolean; has_google: boolean; key_method: string };
 
+export type BackupEvery = 'day' | 'week' | 'off';
+export type BackupLast = { at: number; path: string; auto: boolean; bytes: number; events: number; blobs: number };
+export type BackupStatus = {
+  /** Копии делает это устройство (компьютер). */
+  desktop: boolean;
+  password: boolean;
+  dir: string;
+  /** Папку выбрали, а не папка по умолчанию. */
+  chosen: boolean;
+  every: BackupEvery;
+  keep: number;
+  last: BackupLast | null;
+  /** Последняя копия с любого устройства: «секунды|устройство». */
+  shared: string | null;
+  error: string | null;
+  running: boolean;
+};
+export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; bytes: number };
+export type RestoreResult = { events: number; blobs: number; titles: number; list: Title[] };
+
+/** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
+const UPLOAD_CHUNK = 4 << 20;
+
 /** Запущено внутри приложения (Tauri), а не в браузере. */
 export const inApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -119,6 +142,35 @@ const real = {
   settings: (year: number) => invoke<Settings>('settings', { year }),
   setGoal: (year: number, goal: Goal) => invoke<void>('set_goal', { year, goal }),
   setKey: (name: 'poiskkino' | 'google', value: string) => invoke<void>('set_key', { name, value }),
+  /** Смещение местного времени — для имён резервных копий. */
+  setTz: (minutes: number) => invoke<void>('set_tz', { minutes }),
+  backupStatus: () => invoke<BackupStatus>('backup_status'),
+  backupPassword: (password: string) => invoke<BackupStatus>('backup_password', { password }),
+  backupEvery: (every: BackupEvery) => invoke<BackupStatus>('backup_every', { every }),
+  /** Папка копий; `null` — папка по умолчанию. */
+  backupDir: (path: string | null) => invoke<BackupStatus>('backup_dir', { path }),
+  backupPickDir: () => invoke<BackupStatus>('backup_pick_dir'),
+  backupNow: () => invoke<BackupLast>('backup_now'),
+  /** Загружает файл копии в ядро и возвращает номер загрузки. */
+  backupUpload: async (file: File, progress?: (done: number, total: number) => void): Promise<string> => {
+    let id = 'new';
+    for (let at = 0; at < file.size || at === 0; at += UPLOAD_CHUNK) {
+      const part = new Uint8Array(await file.slice(at, at + UPLOAD_CHUNK).arrayBuffer());
+      const r = await invoke<{ id: string; size: number }>('backup_upload', part, { headers: { 'x-upload': id, 'x-offset': String(at) } });
+      id = r.id;
+      progress?.(r.size, file.size);
+      if (file.size === 0) break;
+    }
+    return id;
+  },
+  backupInspect: (id: string, password: string) => invoke<BackupInfo>('backup_inspect', { id, password }),
+  backupRestore: (id: string, password: string) => invoke<RestoreResult>('backup_restore', { id, password }),
+  backupDiscard: (id: string) => invoke<void>('backup_discard', { id }),
+  /** Автокопия сделана или не получилась — обновить раздел копий. */
+  onBackup: async (listener: () => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen('backup', listener);
+  },
 };
 
 export type Api = typeof real;

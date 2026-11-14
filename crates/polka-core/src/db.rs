@@ -179,6 +179,60 @@ impl Store {
         Ok(self.conn.query_row("SELECT 1 FROM blobs WHERE id = ?1", [id], |_| Ok(())).optional()?.is_some())
     }
 
+    /// Снимок под известным номером (из копии или с другого устройства): номер должен совпасть
+    /// с отпечатком содержимого, а тип — с первыми байтами.
+    pub fn put_blob_checked(&mut self, id: &str, mime: &str, data: &[u8]) -> Result<()> {
+        if blob_id(data) != id {
+            return Err(bad("снимок не совпадает со своим номером"));
+        }
+        self.put_blob(mime, data).map(|_| ())
+    }
+
+    /// Номера всех снимков в базе.
+    pub fn present_blobs(&self) -> Result<Vec<String>> {
+        let mut st = self.conn.prepare("SELECT id FROM blobs ORDER BY added, id")?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Номера обложек, на которые ссылаются живые записи.
+    pub fn referenced_blobs(&self) -> Result<std::collections::BTreeSet<String>> {
+        let mut st = self.conn.prepare("SELECT json_extract(body, '$.cover') FROM items WHERE deleted = 0 AND body IS NOT NULL")?;
+        let rows = st.query_map([], |r| r.get::<_, Option<String>>(0))?;
+        let mut out = std::collections::BTreeSet::new();
+        for r in rows {
+            if let Some(id) = r? {
+                out.insert(id);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Обложки, на которые ссылаются записи, но самих снимков нет (ещё не пришли с другого устройства).
+    pub fn missing_blobs(&self) -> Result<Vec<String>> {
+        let mut out = Vec::new();
+        for id in self.referenced_blobs()? {
+            if !self.has_blob(&id)? {
+                out.push(id);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Сколько событий в журнале.
+    pub fn event_count(&self) -> Result<u64> {
+        Ok(self.conn.query_row("SELECT count(*) FROM events", [], |r| r.get::<_, i64>(0))? as u64)
+    }
+
+    /// Событие устройства под номером — чтобы сверить копию с базой.
+    pub fn event_body(&self, device: &str, seq: i64) -> Result<Option<EventBody>> {
+        let body: Option<String> = self.conn.query_row("SELECT body FROM events WHERE device = ?1 AND seq = ?2", params![device, seq], |r| r.get(0)).optional()?;
+        Ok(match body {
+            Some(b) => Some(serde_json::from_str(&b)?),
+            None => None,
+        })
+    }
+
     /// Последний номер события каждого устройства — что эта база уже знает.
     pub fn versions(&self) -> Result<BTreeMap<String, i64>> {
         let mut st = self.conn.prepare("SELECT device, MAX(seq) FROM events GROUP BY device")?;
