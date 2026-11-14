@@ -2593,3 +2593,19 @@ p {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* «Итоги»: забавные сравнения. */
+.fun ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fun li {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--inset);
+  line-height: 1.45;
+}
