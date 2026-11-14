@@ -47,6 +47,17 @@ pub fn blob_id(data: &[u8]) -> String {
 }
 
 /// Тип картинки по первым байтам: под видом обложки не пролезет что-то другое.
+/// Снимок подходит для базы: не пустой, не больше предела, тип совпадает с первыми байтами.
+pub fn check_blob(mime: &str, data: &[u8]) -> Result<()> {
+    if data.is_empty() || data.len() > MAX_BLOB {
+        return Err(bad(format!("снимок пустой или больше {} МБ", MAX_BLOB / 1024 / 1024)));
+    }
+    if sniff_image(data) != Some(mime) {
+        return Err(bad("подходят только снимки JPEG, PNG и WebP"));
+    }
+    Ok(())
+}
+
 pub fn sniff_image(data: &[u8]) -> Option<&'static str> {
     if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some("image/jpeg")
@@ -157,12 +168,7 @@ impl Store {
 
     /// Сохранить снимок (обложку). Тот же снимок второй раз не пишется.
     pub fn put_blob(&mut self, mime: &str, data: &[u8]) -> Result<String> {
-        if data.is_empty() || data.len() > MAX_BLOB {
-            return Err(bad(format!("снимок пустой или больше {} МБ", MAX_BLOB / 1024 / 1024)));
-        }
-        if sniff_image(data) != Some(mime) {
-            return Err(bad("подходят только снимки JPEG, PNG и WebP"));
-        }
+        check_blob(mime, data)?;
         let id = blob_id(data);
         self.conn.execute(
             "INSERT OR IGNORE INTO blobs(id, mime, size, data, added) VALUES(?1, ?2, ?3, ?4, ?5)",
@@ -255,6 +261,18 @@ impl Store {
             if known.get(&device).is_some_and(|k| *k >= seq) {
                 continue;
             }
+            out.push(Event { device, seq, lamport, body: serde_json::from_str(&body)? });
+        }
+        Ok(out)
+    }
+
+    /// События одного устройства с номерами from..=to, по порядку.
+    pub fn events_range(&self, device: &str, from: i64, to: i64) -> Result<Vec<Event>> {
+        let mut st = self.conn.prepare("SELECT device, seq, lamport, body FROM events WHERE device = ?1 AND seq BETWEEN ?2 AND ?3 ORDER BY seq")?;
+        let rows = st.query_map(params![device, from, to], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?, r.get::<_, String>(3)?)))?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (device, seq, lamport, body) = r?;
             out.push(Event { device, seq, lamport, body: serde_json::from_str(&body)? });
         }
         Ok(out)

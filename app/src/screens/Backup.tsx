@@ -190,7 +190,7 @@ function Restore({ first, nav, pick, onClose }: { first: File; nav: Nav; pick: (
 }
 
 /** Пароль копии: два поля, не короче восьми символов. */
-function PasswordForm({ first, onSaved, onCancel }: { first: boolean; onSaved: (s: BackupStatus) => void; onCancel?: () => void }) {
+function PasswordForm({ first, cloud, onSaved, onCancel }: { first: boolean; cloud: boolean; onSaved: (s: BackupStatus) => void; onCancel?: () => void }) {
   const [a, setA] = useState('');
   const [b, setB] = useState('');
   const [busy, setBusy] = useState(false);
@@ -222,6 +222,9 @@ function PasswordForm({ first, onSaved, onCancel }: { first: boolean; onSaved: (
       <p className="small muted">
         Не короче 8 символов, лучше — фраза из нескольких слов. Пароль нигде не хранится и не восстанавливается: забудете — копию не открыть.
         {first ? '' : ' Прежние копии открываются прежним паролем.'}
+        {cloud
+          ? ' Этим же паролем зашифровано облако: новый пароль уйдёт туда при ближайшем обмене. Если старый пароль мог узнать кто-то ещё, после смены отключите облако с удалением данных и подключите снова — сменится и ключ облака.'
+          : ''}
       </p>
       <label className="field">
         <span>Пароль копии</span>
@@ -337,7 +340,7 @@ export default function BackupSection({ nav }: { nav: Nav }) {
           <div className="row">
             <span className="row-label">
               <span>Пароль копии</span>
-              <span className={'small ' + (st && !st.password ? 'warn-text' : 'muted')}>{st ? (st.password ? 'Задан' : 'Не задан — без него копии не делаются') : '…'}</span>
+              <span className={'small ' + (st && !st.password ? 'warn-text' : 'muted')}>{st ? (st.password ? (st.cloud ? 'Задан, им же зашифровано облако' : 'Задан') : 'Не задан — без него копии не делаются') : '…'}</span>
             </span>
             {st?.password && !changing && (
               <button type="button" className="btn line small" onClick={() => setChanging(true)}>
@@ -348,6 +351,7 @@ export default function BackupSection({ nav }: { nav: Nav }) {
           {st && (!st.password || changing) && (
             <PasswordForm
               first={!st.password}
+              cloud={st.cloud}
               onSaved={(s) => {
                 setSt(s);
                 setChanging(false);
@@ -397,7 +401,7 @@ export default function BackupSection({ nav }: { nav: Nav }) {
       ) : (
         <>
           <p className="small muted">
-            Копии делает «Полка» на компьютере: задайте там пароль копии. Записи телефона попадают в копию после обмена по Wi-Fi, а новый телефон получит всё обратно от компьютера.
+            Копии делает «Полка» на компьютере: задайте там пароль копии. Записи телефона попадают в копию после обмена по Wi-Fi или через облако, а новый телефон получит всё обратно из облака или от компьютера.
           </p>
           <div className="row">
             <span>Последняя копия</span>

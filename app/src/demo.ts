@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, Found, Goal, LanView, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, Season, Status, Title, YearStats } from './api';
 import { todayIso } from './format';
 
 const base = { creators: [] as string[], tags: [] as string[], genres: [] as string[], seasons: [] as Season[], added: '2026-09-20' };
@@ -29,7 +29,12 @@ let titles: Title[] = [
 let goal: Goal = { books: 24, screen: null };
 let lan: LanView = { name: 'Демо', hosts: ['192.168.1.34'], code: null, note: null, peers: [], nearby: [] };
 const QR_DEMO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1z" fill="none" stroke="#15232D" stroke-width="2"/><path d="M11 3h2v2h-2zM14 6h3v2h-3zM10 10h4v3h-4zM16 12h3v4h-3zM12 17h2v5h-2zM20 18h4v2h-4zM17 23h3v3h-3zM23 22h3v4h-3z" fill="#15232D"/></svg>';
-let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false };
+let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false, cloud: false };
+const CLOUD_OFF: CloudStatus = { desktop: true, state: 'off', provider: null, title: null, dav: null, cloud_exists: false, backup_password: false, every: 'auto', running: false, progress: null, last: null, error: null, key_pending: false, notice: null };
+let cloud: CloudStatus = { ...CLOUD_OFF };
+/** Раздел копий в демо обновляется, когда облако меняет пароль копий. */
+const backupListeners = new Set<() => void>();
+const backupChanged = () => backupListeners.forEach((l) => l());
 let next = 1;
 const clone = <X,>(x: X): X => JSON.parse(JSON.stringify(x));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -267,7 +272,12 @@ export const demo: Api = {
     throw new Error('В демо восстановление из копии не работает');
   },
   backupDiscard: async () => {},
-  onBackup: async () => () => undefined,
+  onBackup: async (listener) => {
+    backupListeners.add(listener);
+    return () => {
+      backupListeners.delete(listener);
+    };
+  },
   lanStatus: async () => clone(lan),
   lanScan: async () => {
     await wait(400);
@@ -292,4 +302,46 @@ export const demo: Api = {
   },
   lanUnpair: async () => clone(lan),
   onLan: async () => () => undefined,
+  // Облако в демо — понарошку: вход и обмен только изображаются, файлы никуда не уходят.
+  cloudStatus: async () => clone({ ...cloud, backup_password: backup.password, notice: null }),
+  cloudDavLogin: async (kind, url, user, password) => {
+    await wait(600);
+    if (!user.trim()) throw new Error(kind === 'yadisk' ? 'Введите логин Яндекса' : 'Введите логин');
+    if (!password) throw new Error(kind === 'yadisk' ? 'Введите пароль приложения' : 'Введите пароль');
+    if (kind === 'webdav' && !/^https:\/\/\S+/i.test(url ?? '')) throw new Error('Адрес сервера начинается с https:// — без шифрования пароль ушёл бы по сети открытым');
+    const host = kind === 'yadisk' ? 'webdav.yandex.ru' : (url ?? '').replace(/^https:\/\//i, '').split('/')[0];
+    cloud = { ...cloud, state: 'password', provider: kind, title: kind === 'yadisk' ? 'Яндекс Диск' : 'Сервер WebDAV', dav: { url: url ?? 'https://webdav.yandex.ru', host, user: user.trim() }, error: null };
+    return clone({ ...cloud, backup_password: backup.password, notice: null });
+  },
+  cloudAppPasswords: async () => {},
+  cloudPassword: async (password) => {
+    await wait(700);
+    if ([...password].length < 8) throw new Error('Пароль копии — не короче 8 символов');
+    const notice = backup.password ? null : 'Этот пароль теперь и пароль резервных копий на этом компьютере.';
+    backup = { ...backup, password: true, cloud: true };
+    backupChanged();
+    const at = Math.floor(Date.now() / 1000);
+    cloud = { ...cloud, state: 'ready', cloud_exists: true, last: { at, received: 0, sent: titles.length * 2, files_received: 0, files_sent: 4, files_waiting: 0, problems: [] } };
+    return clone({ ...cloud, backup_password: true, notice });
+  },
+  cloudSyncNow: async () => {
+    await wait(500);
+    cloud = { ...cloud, last: { at: Math.floor(Date.now() / 1000), received: 0, sent: 0, files_received: 0, files_sent: 0, files_waiting: 0, problems: [] } };
+    return clone({ ...cloud, backup_password: backup.password, notice: null });
+  },
+  cloudEvery: async (every) => {
+    cloud = { ...cloud, every };
+    return clone({ ...cloud, backup_password: backup.password, notice: null });
+  },
+  cloudDisconnect: async (wipe) => {
+    await wait(400);
+    const ya = cloud.provider === 'yadisk';
+    cloud = { ...CLOUD_OFF };
+    backup = { ...backup, cloud: false };
+    backupChanged();
+    let notice = wipe ? 'Облако отключено, данные «Полки» из него удалены.' : 'Облако отключено. Данные «Полки» в нём остались — его можно подключить снова.';
+    if (ya) notice += ' Пароль приложения больше не нужен «Полке» — его можно удалить в Яндекс ID.';
+    return clone({ ...cloud, backup_password: backup.password, notice });
+  },
+  onCloud: async () => () => undefined,
 };

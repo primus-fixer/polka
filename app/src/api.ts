@@ -114,6 +114,8 @@ export type BackupStatus = {
   shared: string | null;
   error: string | null;
   running: boolean;
+  /** Подключено облако: оно зашифровано тем же паролем. */
+  cloud: boolean;
 };
 export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; bytes: number };
 export type RestoreResult = { events: number; blobs: number; titles: number; list: Title[] };
@@ -128,6 +130,33 @@ export type LanView = { name: string; hosts: string[]; code: LanCode | null; not
 /** Связь по коду или обмен: с кем, сколько ушло и пришло. */
 export type PairResult = { peer_name: string; sent: number; received: number; files_sent: number; files_received: number; hint: string; remembered: boolean };
 export type LanEvent = { received: number; paired: string | null };
+
+/** Облако: Яндекс Диск по паролю приложения или свой сервер WebDAV. */
+export type CloudProvider = 'yadisk' | 'webdav';
+export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number };
+export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; problems: string[] };
+export type CloudProblem = { kind: 'auth' | 'space' | 'offline' | 'server' | 'gone' | 'replaced' | 'conflict' | 'newer' | 'format' | 'cancelled'; text: string; at: number };
+export type CloudStatus = {
+  desktop: boolean;
+  /** off — не подключено; password — нужен пароль копий; relogin — пароль приложения не подходит; ready — подключено. */
+  state: 'off' | 'password' | 'relogin' | 'ready';
+  provider: CloudProvider | null;
+  title: string | null;
+  dav: { url: string; host: string; user: string } | null;
+  /** В облаке уже есть данные «Полки»: пароль копий вводят, а не придумывают. */
+  cloud_exists: boolean;
+  /** На этом устройстве задан пароль копий. */
+  backup_password: boolean;
+  every: 'auto' | 'manual';
+  running: boolean;
+  progress: CloudStep | null;
+  last: CloudLast | null;
+  error: CloudProblem | null;
+  /** Новый пароль копий ещё не ушёл в облако. */
+  key_pending: boolean;
+  notice: string | null;
+};
+export type CloudEvent = { running: boolean; received: number; step: CloudStep | null };
 
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
@@ -191,6 +220,20 @@ const real = {
   onLan: async (listener: (e: LanEvent) => void): Promise<() => void> => {
     const { listen } = await import('@tauri-apps/api/event');
     return listen<LanEvent>('lan', (ev) => listener(ev.payload));
+  },
+  cloudStatus: () => invoke<CloudStatus>('cloud_status'),
+  /** Вход по логину и паролю: Яндекс Диск (пароль приложения) или свой сервер WebDAV. */
+  cloudDavLogin: (kind: CloudProvider, url: string | null, user: string, password: string) => invoke<CloudStatus>('cloud_dav_login', { kind, url, user, password }),
+  /** Страница Яндекс ID, где создают пароль приложения. */
+  cloudAppPasswords: () => invoke<void>('cloud_app_passwords'),
+  cloudPassword: (password: string) => invoke<CloudStatus>('cloud_password', { password }),
+  cloudSyncNow: () => invoke<CloudStatus>('cloud_sync_now'),
+  cloudEvery: (every: CloudStatus['every']) => invoke<CloudStatus>('cloud_every', { every }),
+  cloudDisconnect: (wipe: boolean) => invoke<CloudStatus>('cloud_disconnect', { wipe }),
+  /** Обмен через облако идёт или закончился: `received` — сколько нового пришло. */
+  onCloud: async (listener: (e: CloudEvent) => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<CloudEvent>('cloud', (ev) => listener(ev.payload));
   },
   /** Автокопия сделана или не получилась — обновить раздел копий. */
   onBackup: async (listener: () => void): Promise<() => void> => {

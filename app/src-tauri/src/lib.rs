@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
 mod backup;
+mod cloud;
 mod lan;
 
 /// Версия «Полки» — пишется в резервные копии.
@@ -433,6 +434,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -445,7 +447,14 @@ pub fn run() {
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
+            cloud::start(app.handle().clone());
             Ok(())
+        })
+        .on_window_event(|_, event| {
+            // Вернулись в «Полку» — пора обменяться через облако, если давно не обменивались.
+            if let tauri::WindowEvent::Focused(true) = event {
+                cloud::resumed();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             titles,
@@ -483,6 +492,13 @@ pub fn run() {
             lan::lan_pair_qr,
             lan::lan_sync_now,
             lan::lan_unpair,
+            cloud::cloud_status,
+            cloud::cloud_app_passwords,
+            cloud::cloud_dav_login,
+            cloud::cloud_password,
+            cloud::cloud_sync_now,
+            cloud::cloud_every,
+            cloud::cloud_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("«Полка» не запустилась");

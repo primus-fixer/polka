@@ -108,11 +108,13 @@ export default function App() {
     loadGoal();
   }, [loadGoal]);
 
-  // Обмен по Wi-Fi идёт в фоне: пришло новое — перечитать полку.
+  // Обмен по Wi-Fi и через облако идёт в фоне: пришло новое — перечитать полку.
   useEffect(() => {
-    const un = api.onLan((e) => (e.received > 0 || e.paired) && reload()).catch(() => () => undefined);
+    const lan = api.onLan((e) => (e.received > 0 || e.paired) && reload()).catch(() => () => undefined);
+    const cloud = api.onCloud((e) => !e.running && e.received > 0 && reload()).catch(() => () => undefined);
     return () => {
-      un.then((f) => f());
+      lan.then((f) => f());
+      cloud.then((f) => f());
     };
   }, [reload]);
 

@@ -4,6 +4,7 @@ import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
 import BackupSection from './Backup';
+import CloudSection from './Cloud';
 import WifiSection from './Wifi';
 
 type Props = {
@@ -167,17 +168,19 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
 
       <WifiSection onSynced={onSynced} />
 
+      <CloudSection />
+
       <BackupSection nav={nav} />
 
       <section className="stack-s">
         <h2 className="sec">Данные</h2>
         <p className="small muted">
-          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. Обмен через Яндекс Диск — в следующей версии.
+          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. На другие устройства они уходят только по Wi-Fi или через облако — зашифрованными.
         </p>
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.3.0</p>
+      <p className="small muted3">Полка 0.4.0</p>
     </div>
   );
 }
