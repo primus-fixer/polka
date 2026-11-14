@@ -555,6 +555,10 @@ pub fn open_link(app: AppHandle, url: String) -> Res<()> {
 
 /// Протокол `book`: картинка книги по хешу файла и пути внутри книги.
 pub fn response(app: &AppHandle, path: &str) -> tauri::http::Response<Vec<u8>> {
+    // Пока «Полка» заблокирована, картинок книг не отдаём.
+    if app.state::<AppState>().unlocked().is_err() {
+        return tauri::http::Response::builder().status(404).body(Vec::new()).unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+    }
     let raw = percent_decode(path.trim_start_matches('/'));
     let found = raw.split_once('/').filter(|(hash, _)| is_hash(hash)).and_then(|(hash, inner)| load(app, hash).ok().and_then(|b| b.image(inner)));
     let builder = tauri::http::Response::builder()

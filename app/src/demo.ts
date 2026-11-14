@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, CloudStatus, FilesSettings, Found, Goal, LanView, LocalBook, Mark, Reading, RemoteBook, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, LockStatus, Candidate, CloudStatus, FilesSettings, Found, Goal, LanView, LocalBook, Mark, Reading, RemoteBook, Season, Status, Title, YearStats } from './api';
 import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoOffset, demoSearch } from './demoBook';
 import demoPdfUrl from './assets/demo-train.pdf?url';
 
@@ -44,6 +44,24 @@ const QR_DEMO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><re
 let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false, cloud: false };
 const CLOUD_OFF: CloudStatus = { desktop: true, state: 'off', provider: null, title: null, dav: null, cloud_exists: false, backup_password: false, every: 'auto', running: false, progress: null, last: null, error: null, key_pending: false, notice: null };
 let cloud: CloudStatus = { ...CLOUD_OFF };
+// Вход в демо: PIN-код в памяти, отпечатка нет.
+let demoPin: string | null = null;
+let demoLocked = false;
+let demoFails = 0;
+let demoRecovering = false;
+const lockView = (error: string | null = null): LockStatus => ({
+  pin: !!demoPin,
+  locked: demoLocked,
+  bio: false,
+  bio_ready: false,
+  bio_kind: '',
+  recover: 'device',
+  wait: 0,
+  left: Math.max(0, 5 - demoFails),
+  recovery: false,
+  key: 'demo',
+  error,
+});
 /** Раздел копий в демо обновляется, когда облако меняет пароль копий. */
 const backupListeners = new Set<() => void>();
 const backupChanged = () => backupListeners.forEach((l) => l());
@@ -199,6 +217,41 @@ function stats(year: number): YearStats {
 }
 
 export const demo: Api = {
+  lockStatus: async () => lockView(),
+  pinUnlock: async (code) => {
+    if (code === demoPin) {
+      demoLocked = false;
+      demoFails = 0;
+      return lockView();
+    }
+    demoFails++;
+    return lockView('Неверный PIN-код');
+  },
+  pinSet: async (code, current) => {
+    if (demoPin && !demoRecovering && current !== demoPin) return lockView('Неверный PIN-код');
+    demoPin = code;
+    demoRecovering = false;
+    return lockView();
+  },
+  pinOff: async (current) => {
+    if (current !== demoPin) return lockView('Неверный PIN-код');
+    demoPin = null;
+    demoLocked = false;
+    return lockView();
+  },
+  bioUnlock: async () => lockView('Отпечаток в демо недоступен'),
+  bioSet: async () => lockView('Отпечаток в демо недоступен'),
+  pinRecover: async () => {
+    demoLocked = false;
+    demoRecovering = true;
+    return { ...lockView(), recovery: true };
+  },
+  lockNow: async () => {
+    if (demoPin) demoLocked = true;
+    return lockView();
+  },
+  appVisible: async () => lockView(),
+  onLocked: async () => () => undefined,
   titles: async () => clone(titles),
   save: async (t) => {
     const x = clone(t);

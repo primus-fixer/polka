@@ -695,3 +695,8 @@ mod tests {
         assert!(qr_svg("polka://pair?v=1&d=a").unwrap().starts_with("<?xml"));
     }
 }
+
+/// «Полка» заблокировалась: код связи больше не действует — по прежнему коду или QR-коду не подключиться.
+pub fn on_lock(state: &AppState) {
+    lock(&state.lan.code).take();
+}

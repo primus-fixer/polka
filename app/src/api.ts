@@ -184,6 +184,32 @@ export type FilesSettings = { sync: boolean; backup: boolean; count: number; byt
 export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
 export type BookDrop = { ok?: Imported; error?: string };
 
+// ——— Вход ———
+
+/** Ответ команд с данными, пока «Полка» заблокирована. */
+export const LOCKED = 'locked';
+/** Вход: PIN-код, отпечаток или Windows Hello, паузы после ошибок, сброс забытого PIN. */
+export type LockStatus = {
+  pin: boolean;
+  locked: boolean;
+  /** Вход по отпечатку или Windows Hello включён. */
+  bio: boolean;
+  /** …и доступен на устройстве сейчас. */
+  bio_ready: boolean;
+  bio_kind: '' | 'fingerprint' | 'face' | 'hello';
+  /** Чем подтвердить себя, если PIN забыт: device (экран блокировки телефона), hello или пусто. */
+  recover: '' | 'device' | 'hello';
+  /** Секунд до следующей попытки. */
+  wait: number;
+  /** Сколько ещё можно ошибиться до паузы. */
+  left: number;
+  /** Устройство подтвердило владельца — можно задать новый PIN без старого. */
+  recovery: boolean;
+  /** Чем защищён ключ базы. */
+  key: string;
+  error: string | null;
+};
+
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
 
@@ -191,6 +217,23 @@ const UPLOAD_CHUNK = 4 << 20;
 export const inApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 const real = {
+  lockStatus: () => invoke<LockStatus>('lock_status'),
+  pinUnlock: (code: string) => invoke<LockStatus>('pin_unlock', { code }),
+  /** Новый PIN; `current` — нынешний (если PIN уже есть и это не сброс). */
+  pinSet: (code: string, current: string | null) => invoke<LockStatus>('pin_set', { code, current }),
+  pinOff: (current: string | null) => invoke<LockStatus>('pin_off', { current }),
+  bioUnlock: () => invoke<LockStatus>('bio_unlock'),
+  bioSet: (on: boolean) => invoke<LockStatus>('bio_set', { on }),
+  /** «Забыли PIN?»: подтвердить себя блокировкой устройства. */
+  pinRecover: () => invoke<LockStatus>('pin_recover'),
+  lockNow: () => invoke<LockStatus>('lock_now'),
+  /** Экран свернули или снова открыли. */
+  appVisible: (visible: boolean) => invoke<LockStatus>('app_visible', { visible }),
+  /** «Полка» заблокировалась сама (5 минут в фоне). */
+  onLocked: async (listener: () => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen('locked', listener);
+  },
   titles: () => invoke<Title[]>('titles'),
   save: (title: Title) => invoke<Title>('save_title', { title, today: todayIso() }),
   remove: (id: string) => invoke<void>('delete_title', { id }),

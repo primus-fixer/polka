@@ -6,6 +6,7 @@ import { Seg } from '../ui';
 import BackupSection from './Backup';
 import BookFilesSection from './BookFiles';
 import CloudSection from './Cloud';
+import SecuritySection, { type Security } from './Security';
 import WifiSection from './Wifi';
 
 type Props = {
@@ -19,6 +20,8 @@ type Props = {
   /** Пришли записи с другого устройства — перечитать полку. */
   onSynced: () => void;
   nav: Nav;
+  /** Вход по PIN-коду и отпечатку. */
+  security: Security;
 };
 
 const METHOD: Record<string, string> = {
@@ -28,7 +31,7 @@ const METHOD: Record<string, string> = {
   demo: 'демо в браузере: данные не сохраняются',
 };
 
-export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav }: Props) {
+export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav, security }: Props) {
   const [info, setInfo] = useState<S | null>(null);
   const [books, setBooks] = useState(goal.books ? String(goal.books) : '');
   const [screen, setScreen] = useState(goal.screen ? String(goal.screen) : '');
@@ -174,6 +177,8 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
       <BookFilesSection nav={nav} onChange={onSynced} />
 
       <BackupSection nav={nav} />
+
+      <SecuritySection sec={security} />
 
       <section className="stack-s">
         <h2 className="sec">Данные</h2>

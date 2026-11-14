@@ -21,6 +21,7 @@ pub mod isbn;
 pub mod lan;
 pub mod model;
 pub mod pairing;
+pub mod pin;
 pub mod reader;
 pub mod stats;
 pub mod sync;

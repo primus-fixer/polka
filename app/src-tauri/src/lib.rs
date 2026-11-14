@@ -4,7 +4,8 @@
 //! Поиск в каталогах и скачивание обложек идут в фоновом потоке, чтобы окно не замирало.
 //! Снимки обложек отдаёт протокол `cover` (адрес `cover://localhost/<id>` или
 //! `http://cover.localhost/<id>` на Windows и Android) — так экран не гоняет картинки через команды.
-//! Картинки книг в читалке — протокол `book` (см. `reader`).
+//! Картинки книг в читалке — протокол `book` (см. `reader`). Вход по PIN-коду и отпечатку — `guard`:
+//! пока «Полка» заблокирована, команды с данными отвечают `locked`.
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -20,8 +21,11 @@ use tauri::{Manager, State};
 
 mod backup;
 mod cloud;
+mod guard;
 mod lan;
 mod reader;
+
+use guard::{Guard, LOCKED};
 
 /// Версия «Полки» — пишется в резервные копии.
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -38,11 +42,28 @@ struct AppState {
     name: String,
     /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
     lan: lan::Lan,
+    /// Вход по PIN-коду: заблокирована ли «Полка».
+    guard: Mutex<Guard>,
 }
 
 impl AppState {
+    /// База для команд с данными: пока «Полка» заблокирована, ответ — `locked`.
     fn store(&self) -> Res<MutexGuard<'_, Store>> {
+        self.unlocked()?;
+        self.db()
+    }
+
+    /// База без проверки входа — для фоновой работы (автокопии) и самого входа.
+    fn db(&self) -> Res<MutexGuard<'_, Store>> {
         self.store.lock().map_err(|_| "база занята — попробуйте ещё раз".to_string())
+    }
+
+    /// Пока «Полка» заблокирована, команды с данными отвечают `locked`.
+    fn unlocked(&self) -> Res<()> {
+        if self.guard.lock().map_err(err)?.locked {
+            return Err(LOCKED.into());
+        }
+        Ok(())
     }
 
     fn keys(&self) -> Keys {
@@ -504,7 +525,7 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(move || responder.respond(reader::response(&app, &path)));
         });
     #[cfg(mobile)]
-    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_biometric::init());
     // Окно выбора папки для резервных копий.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
@@ -522,7 +543,9 @@ pub fn run() {
             let _ = polka_core::files::adopt(&mut store);
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
-            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
+            // С PIN-кодом «Полка» открывается заблокированной.
+            let guard = Guard::new(guard::has_pin(&store));
+            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard: Mutex::new(guard) });
             app.manage(reader::Books::default());
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
@@ -530,13 +553,23 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| match event {
-            // Вернулись в «Полку» — пора обменяться через облако, если давно не обменивались.
-            tauri::WindowEvent::Focused(true) => cloud::resumed(),
+            // Свернули или вернулись: через 5 минут в фоне — блокировка (с PIN-кодом); вернулись —
+            // пора обменяться через облако, если давно не обменивались.
+            tauri::WindowEvent::Focused(focused) => guard::on_focus(window.app_handle(), *focused),
             // Файл книги перетащили в окно — открыть в читалке.
             tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => reader::dropped(window.app_handle(), paths),
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            guard::lock_status,
+            guard::pin_unlock,
+            guard::pin_set,
+            guard::pin_off,
+            guard::bio_unlock,
+            guard::bio_set,
+            guard::pin_recover,
+            guard::lock_now,
+            guard::app_visible,
             titles,
             save_title,
             delete_title,

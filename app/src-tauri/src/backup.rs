@@ -272,7 +272,7 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
     let state = app.state::<AppState>();
     let at = polka_core::now_secs();
     let (key, dir, events, blobs, books, manifest, tz) = {
-        let st = state.store()?;
+        let st = state.db()?;
         let key = st.meta(META_KEY).map_err(err)?.ok_or_else(|| "Сначала задайте пароль копии".to_string())?;
         let key = BackupKey::from_meta(&key).map_err(err)?;
         let events = st.events_missing(&Default::default()).map_err(err)?;
@@ -293,7 +293,7 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
         let mut w = Writer::new(BufWriter::with_capacity(1 << 20, file), &key, &manifest).map_err(err)?;
         w.events(&events).map_err(err)?;
         for id in &blobs {
-            let blob = state.store()?.blob(id).map_err(err)?;
+            let blob = state.db()?.blob(id).map_err(err)?;
             if let Some((mime, data)) = blob {
                 w.blob(id, &mime, &data).map_err(err)?;
             }
@@ -302,7 +302,7 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
             for k in 0..f.parts() {
                 let offset = k * polka_core::files::PART as u64;
                 let part = {
-                    let st = state.store()?;
+                    let st = state.db()?;
                     polka_core::files::read_part(&st, &f.id, offset).map_err(err)?
                 };
                 let Some((total, data)) = part else { break };
@@ -332,14 +332,14 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
     };
     let last = Last { at, path: path.display().to_string(), auto, bytes: made.bytes, events: made.events, blobs: made.blobs, books: made.books };
     {
-        let mut st = state.store()?;
+        let mut st = state.db()?;
         st.set_meta(META_LOCAL, &serde_json::to_string(&last).map_err(err)?).map_err(err)?;
         st.set_meta(META_ERROR, "").map_err(err)?;
         // Когда и где была копия — общая настройка: её увидит и телефон.
         put_setting(&mut st, SETTING_LAST, &format!("{at}|{}", state.name))?;
     }
     if auto {
-        let every = state.store().map(|st| every(&st)).unwrap_or_else(|_| "day".into());
+        let every = state.db().map(|st| every(&st)).unwrap_or_else(|_| "day".into());
         prune(&dir, keep(&every));
     }
     let _ = app.emit("backup", &last);
@@ -387,10 +387,10 @@ pub fn start_auto(app: AppHandle) {
         std::thread::sleep(Duration::from_secs(30));
         loop {
             let state = app.state::<AppState>();
-            let is_due = state.store().ok().map(|st| due(&st).unwrap_or(false)).unwrap_or(false);
+            let is_due = state.db().ok().map(|st| due(&st).unwrap_or(false)).unwrap_or(false);
             if is_due {
                 if let Err(e) = make(&app, true) {
-                    if let Ok(st) = state.store() {
+                    if let Ok(st) = state.db() {
                         let _ = st.set_meta(META_ERROR, &e);
                     }
                     let _ = app.emit("backup", ());
