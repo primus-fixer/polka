@@ -144,7 +144,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         >
           <label className="field">
             <span>Google Books — ключ</span>
-            <input value={google} onChange={(e) => setGoogle(e.target.value)} placeholder={info?.has_google ? 'ключ указан — введите новый, чтобы заменить' : 'без ключа Google Books не отвечает'} autoComplete="off" spellCheck={false} />
+            <input value={google} onChange={(e) => setGoogle(e.target.value)} placeholder={info?.has_google ? 'ключ указан — введите новый, чтобы заменить' : 'нужен, если Google пишет «без ключа не отвечает»'} autoComplete="off" spellCheck={false} />
           </label>
           <div className="key-actions">
             <button type="submit" className="btn line small" disabled={!google.trim()}>
@@ -156,7 +156,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
               </button>
             )}
           </div>
-          <p className="small muted">{info?.has_google ? 'Ключ указан. Бесплатно — до 1000 запросов в день.' : 'Без ключа книги ищутся в FantLab и Open Library.'}</p>
+          <p className="small muted">{info?.has_google ? 'Ключ указан. Бесплатно — до 1000 запросов в день.' : 'Без ключа Google отвечает не из всех сетей. С ключом — до 1000 запросов в день.'}</p>
         </form>
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
       </section>

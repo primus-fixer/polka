@@ -76,8 +76,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: covers
-      # Ключи — секретами: GOOGLE_BOOKS_KEY (без него Google Books не отвечает)
-      # и POISKKINO_KEY (без него фильмы пропускаются).
+      # Ключи — секретами: POISKKINO_KEY (без него фильмы пропускаются)
+      # и, по желанию, GOOGLE_BOOKS_KEY.
       - name: Каталоги — 30 книг и 10 фильмов
         env:
           GOOGLE_BOOKS_KEY: ${{ secrets.GOOGLE_BOOKS_KEY }}

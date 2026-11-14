@@ -1,7 +1,8 @@
 //! Google Books: поиск по названию, автору и ISBN.
 //!
-//! Нужен ключ из настроек: без ключа Google отвечает 429 — дневная квота анонимных
-//! запросов равна нулю (проверено 14.11.2026). С ключом — 1000 запросов в день бесплатно.
+//! Без ключа Google отвечает не из всех сетей: из некоторых приходит 429 «квота исчерпана»
+//! (14.11.2026 так было из сети с ограничениями, а из сети GitHub всё работало).
+//! Ключ из настроек даёт свою квоту — 1000 запросов в день бесплатно.
 
 use super::http::{enc, status_error, Http};
 use super::{edition_label, strs, year_in, Candidate, CoverOption};
@@ -17,7 +18,7 @@ pub const ID: &str = "google";
 fn google_error(status: u16, key: Option<&str>) -> Error {
     let has_key = key.is_some_and(|k| !k.is_empty());
     match status {
-        429 | 403 if !has_key => Error::Net(format!("{NAME}: без ключа не отвечает — укажите бесплатный ключ в настройках")),
+        429 | 403 if !has_key => Error::Net(format!("{NAME}: без ключа сейчас не отвечает — укажите бесплатный ключ в настройках")),
         429 => Error::Net(format!("{NAME}: дневной лимит запросов по ключу исчерпан")),
         400 | 403 => Error::Net(format!("{NAME}: ключ не подходит — проверьте его в настройках")),
         _ => status_error(NAME, status),
@@ -128,7 +129,7 @@ mod tests {
 
     #[test]
     fn explains_missing_key() {
-        // Так Google отвечал без ключа 14.11.2026: квота анонимных запросов — ноль.
+        // Так Google отвечает без ключа из некоторых сетей: «квота исчерпана».
         let body = r#"{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}"#;
         let http = Fake::default().route("https://www.googleapis.com/books/v1/volumes?", 429, body);
         assert!(search(&http, "пикник", None).unwrap_err().to_string().contains("без ключа"));

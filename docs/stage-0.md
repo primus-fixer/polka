@@ -18,8 +18,8 @@ Google Books и Open Library так же, как приложение, и ска
 
 **В GitHub** — проще всего, ничего ставить не нужно. Проверка запускается сама после каждого пуша в main.
 
-1. Добавьте секреты (**Settings → Secrets and variables → Actions**): `GOOGLE_BOOKS_KEY` — без него Google
-   Books не отвечает, и `POISKKINO_KEY` — для фильмов. Где взять ключи — в [stage-1.md](stage-1.md).
+1. Добавьте секреты (**Settings → Secrets and variables → Actions**): `POISKKINO_KEY` — для фильмов и, по желанию,
+   `GOOGLE_BOOKS_KEY`: из сети GitHub Google отвечает и без ключа. Где взять ключи — в [stage-1.md](stage-1.md).
 2. **Actions → Проверки → Run workflow.** Через несколько минут итог появится на странице запуска,
    а отчёт с картинками — в **Artifacts** (`cover-report`).
 
@@ -32,8 +32,8 @@ POISKKINO_KEY=ваш-ключ cargo run -p polka-core --example cover_check -- d
 ```
 
 В Windows (PowerShell) ключ задаётся так: `$env:POISKKINO_KEY="ваш-ключ"`, затем та же команда.
-Ключ Google Books задаётся так же — `GOOGLE_BOOKS_KEY`. Без него Google отвечает «квота исчерпана»: с ноября 2026
-года анонимных запросов он не принимает.
+Ключ Google Books задаётся так же — `GOOGLE_BOOKS_KEY`. Он нужен, если Google отвечает «квота исчерпана»:
+без ключа так бывает из некоторых сетей.
 
 **Через Claude** — откройте этот чат в приложении Claude на компьютере и напишите «запусти проверку
 обложек»: если на компьютере установлен Rust, Claude запустит её сам и разберёт отчёт.
