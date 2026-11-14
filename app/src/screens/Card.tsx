@@ -3,6 +3,7 @@ import type { Nav } from '../App';
 import { api, message, photoToDataUrl, type BookFormat, type Status, type Title } from '../api';
 import { dayMonth, decimal, plural, span } from '../format';
 import { Bar, Cover, Header, Icon, RatingPicker, Row, Seg, TagPicker } from '../ui';
+import CardPicture from './CardPicture';
 import { kindLabel, seriesLine } from './Home';
 
 export const STATUS: [Status, string][] = [
@@ -46,6 +47,7 @@ export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [openSeason, setOpenSeason] = useState<number | null>(() => seriesLine(t).next?.[0] ?? null);
   const [edit, setEdit] = useState(false);
+  const [picture, setPicture] = useState(false);
   const [draft, setDraft] = useState({ title: t.title, creators: t.creators.join(', '), year: t.year ?? '' });
   const [newSeason, setNewSeason] = useState('');
   const file = useRef<HTMLInputElement>(null);
@@ -95,11 +97,17 @@ export default function Card({ t, titles, nav, wide }: { t: Title; titles: Title
       <Header
         onBack={nav.back}
         right={
-          <button type="button" className="icon-btn" aria-label="Изменить название и автора" aria-expanded={edit} onClick={() => setEdit(!edit)}>
-            <Icon name="pencil" />
-          </button>
+          <span className="topbar-tools">
+            <button type="button" className="icon-btn" aria-label="Поделиться карточкой" onClick={() => setPicture(true)}>
+              <Icon name="share" />
+            </button>
+            <button type="button" className="icon-btn" aria-label="Изменить название и автора" aria-expanded={edit} onClick={() => setEdit(!edit)}>
+              <Icon name="pencil" />
+            </button>
+          </span>
         }
       />
+      {picture && <CardPicture t={t} nav={nav} onClose={() => setPicture(false)} />}
 
       <div className="hero" style={{ gridTemplateColumns: wide ? '200px minmax(0, 1fr)' : '120px minmax(0, 1fr)' }}>
         <Cover t={t} size="hero" />

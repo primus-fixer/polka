@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
 mod backup;
+mod cloud;
 mod lan;
 
 /// Версия «Полки» — пишется в резервные копии.
@@ -262,10 +263,16 @@ async fn search(state: State<'_, AppState>, kind: String, query: String) -> Res<
     .await
 }
 
+/// Добавление по ссылке — или по тексту из «Поделиться», в котором есть ссылка.
 #[tauri::command]
 async fn from_link(state: State<'_, AppState>, url: String) -> Res<Candidate> {
     let net = state.net.clone();
-    blocking(move || catalog::link::from_link(net.as_ref(), &url).map_err(err)).await
+    let keys = state.keys();
+    blocking(move || {
+        let url = catalog::link::link_in(&url).unwrap_or(url.trim()).to_string();
+        catalog::from_link(net.as_ref(), &url, &keys).map_err(err)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -403,6 +410,66 @@ fn set_key(state: State<'_, AppState>, name: String, value: String) -> Res<()> {
     save_keys(&state.dir, &keys)
 }
 
+// ——— Картинка года ———
+
+/// Обложка из базы для холста картинки года: байты снимка, без адреса протокола —
+/// так холст не считается «чужим» и картинку можно сохранить.
+#[tauri::command]
+fn cover_bytes(state: State<AppState>, id: String) -> Res<tauri::ipc::Response> {
+    if id.len() != 64 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("неверный номер обложки".into());
+    }
+    let (_, data) = state.store()?.blob(&id).map_err(err)?.ok_or("обложки нет в базе")?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
+/// Имя файла без знаков, которые Windows не принимает.
+#[cfg_attr(not(desktop), allow(dead_code))]
+fn file_name(name: &str) -> String {
+    let clean: String = name.chars().filter(|c| !c.is_control() && !r#"<>:"/\|?*"#.contains(*c)).collect();
+    let clean = clean.trim().trim_end_matches('.').to_string();
+    let clean = if clean.is_empty() { "Полка.png".to_string() } else { clean };
+    if clean.to_lowercase().ends_with(".png") {
+        clean
+    } else {
+        format!("{clean}.png")
+    }
+}
+
+/// Компьютер: картинка года — в файл через окно «Сохранить как» (по умолчанию — «Изображения»).
+/// Возвращает путь; `None` — окно закрыли.
+#[tauri::command]
+async fn save_image(app: tauri::AppHandle, name: String, data: String) -> Res<Option<String>> {
+    let bytes = B64.decode(data.as_bytes()).map_err(|_| "картинка повреждена".to_string())?;
+    if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) || bytes.len() > 32 << 20 {
+        return Err("ожидалась картинка PNG".into());
+    }
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_dialog::DialogExt;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut dialog = app.dialog().file().set_title("Сохранить картинку").set_file_name(file_name(&name)).add_filter("Картинка PNG", &["png"]);
+        if let Ok(dir) = app.path().picture_dir() {
+            if dir.is_dir() {
+                dialog = dialog.set_directory(dir);
+            }
+        }
+        dialog.save_file(move |p| {
+            let _ = tx.send(p);
+        });
+        let picked = tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten()).await.map_err(err)?;
+        let Some(p) = picked else { return Ok(None) };
+        let path = p.into_path().map_err(err)?;
+        std::fs::write(&path, &bytes).map_err(|e| format!("картинка не сохранилась: {e}"))?;
+        Ok(Some(path.display().to_string()))
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = (app, name, bytes);
+        Err("На телефоне картинку отправляют через «Поделиться»".into())
+    }
+}
+
 // ——— Протокол обложек ———
 
 fn cover_response(state: &AppState, path: &str) -> tauri::http::Response<Vec<u8>> {
@@ -433,6 +500,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -445,7 +513,14 @@ pub fn run() {
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
+            cloud::start(app.handle().clone());
             Ok(())
+        })
+        .on_window_event(|_, event| {
+            // Вернулись в «Полку» — пора обменяться через облако, если давно не обменивались.
+            if let tauri::WindowEvent::Focused(true) = event {
+                cloud::resumed();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             titles,
@@ -465,6 +540,8 @@ pub fn run() {
             set_goal,
             set_key,
             set_tz,
+            cover_bytes,
+            save_image,
             backup::backup_status,
             backup::backup_password,
             backup::backup_every,
@@ -483,6 +560,13 @@ pub fn run() {
             lan::lan_pair_qr,
             lan::lan_sync_now,
             lan::lan_unpair,
+            cloud::cloud_status,
+            cloud::cloud_app_passwords,
+            cloud::cloud_dav_login,
+            cloud::cloud_password,
+            cloud::cloud_sync_now,
+            cloud::cloud_every,
+            cloud::cloud_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("«Полка» не запустилась");
@@ -491,6 +575,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_file_names() {
+        assert_eq!(file_name("Полка — итоги 2026.png"), "Полка — итоги 2026.png");
+        assert_eq!(file_name("итоги: 2026/11?"), "итоги 202611.png");
+        assert_eq!(file_name("  ...  "), "Полка.png");
+        assert_eq!(file_name("a\u{0}b.PNG"), "ab.PNG");
+    }
 
     #[test]
     fn data_url() {

@@ -22,6 +22,34 @@ pub fn from_link(http: &dyn Http, url: &str) -> Result<Candidate> {
     parse_page(&r.text(), url).ok_or_else(|| Error::NotFound("на странице не нашлось ни названия, ни обложки — добавьте вручную".into()))
 }
 
+/// Номер фильма или сериала из адреса Кинопоиска: kinopoisk.ru/film/41519/, /series/404900/.
+/// Страницы Кинопоиска программе не отдаются, поэтому данные берутся из ПоискКино по этому номеру.
+pub fn kinopoisk_id(url: &str) -> Option<String> {
+    let rest = url.trim().split_once("://")?.1;
+    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let host = host.rsplit('@').next()?.split(':').next()?.to_ascii_lowercase();
+    if host != "kinopoisk.ru" && !host.ends_with(".kinopoisk.ru") {
+        return None;
+    }
+    let mut parts = path.split(['?', '#']).next()?.split('/').filter(|p| !p.is_empty());
+    while let Some(p) = parts.next() {
+        if p == "film" || p == "series" {
+            let id = parts.next()?;
+            return (!id.is_empty() && id.len() <= 10 && id.bytes().all(|b| b.is_ascii_digit())).then(|| id.to_string());
+        }
+    }
+    None
+}
+
+/// Первая ссылка в тексте из «Поделиться»: «Посмотрите «Брат» на Кинопоиске https://…».
+pub fn link_in(text: &str) -> Option<&str> {
+    let start = text.find("https://").or_else(|| text.find("http://"))?;
+    let tail = &text[start..];
+    let end = tail.find(|c: char| c.is_whitespace() || "<>\"«»".contains(c)).unwrap_or(tail.len());
+    let url = tail[..end].trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '\'']);
+    (url.len() > "https://".len()).then_some(url)
+}
+
 fn host(url: &str) -> &str {
     url.split("://").nth(1).and_then(|r| r.split('/').next()).unwrap_or("сайт")
 }
@@ -255,6 +283,32 @@ pub fn decode(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::catalog::http::fake::Fake;
+
+    #[test]
+    fn kinopoisk_numbers_from_addresses() {
+        for (url, id) in [
+            ("https://www.kinopoisk.ru/film/41519/", Some("41519")),
+            ("https://kinopoisk.ru/series/404900/?utm_source=share", Some("404900")),
+            ("https://m.kinopoisk.ru/film/41519", Some("41519")),
+            ("http://www.kinopoisk.ru/film/41519/watch/#t", Some("41519")),
+            ("https://www.kinopoisk.ru/name/7760/", None),
+            ("https://hd.kinopoisk.ru/film/4f1e2d", None),
+            ("https://kinopoisk.ru.evil.example/film/1/", None),
+            ("https://evil.example/kinopoisk.ru/film/1/", None),
+            ("https://www.kinopoisk.ru/film/../1", None),
+        ] {
+            assert_eq!(kinopoisk_id(url).as_deref(), id, "{url}");
+        }
+    }
+
+    #[test]
+    fn link_in_shared_text() {
+        assert_eq!(link_in("Посмотрите «Брат» на Кинопоиске https://www.kinopoisk.ru/film/41519/"), Some("https://www.kinopoisk.ru/film/41519/"));
+        assert_eq!(link_in("Пикник на обочине (https://www.litres.ru/book/piknik-6155088/)."), Some("https://www.litres.ru/book/piknik-6155088/"));
+        assert_eq!(link_in("https://www.livelib.ru/book/1, советую"), Some("https://www.livelib.ru/book/1"));
+        assert_eq!(link_in("без ссылки"), None);
+        assert_eq!(link_in("https://"), None);
+    }
 
     #[test]
     fn json_ld_book() {

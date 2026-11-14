@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/polka-core", "crates/polka-secure", "app/src-tauri"]
+members = ["crates/polka-core", "crates/polka-cloud", "crates/polka-secure", "app/src-tauri"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.6.0"
 edition = "2021"
 publish = false
 

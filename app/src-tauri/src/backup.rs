@@ -18,7 +18,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// На устройстве (не обменивается): ключ копий, папка, как часто, последняя копия, ошибка автокопии.
-const META_KEY: &str = "backup.key";
+pub(crate) const META_KEY: &str = "backup.key";
 const META_DIR: &str = "backup.dir";
 const META_EVERY: &str = "backup.every";
 const META_LOCAL: &str = "backup.local";
@@ -69,6 +69,8 @@ pub struct Status {
     /// Почему не получилась последняя автокопия.
     pub error: Option<String>,
     pub running: bool,
+    /// Подключено облако: оно зашифровано тем же паролем.
+    pub cloud: bool,
 }
 
 fn every(st: &Store) -> String {
@@ -117,6 +119,7 @@ fn status_of(app: &AppHandle, st: &Store) -> Status {
         shared: setting(st, SETTING_LAST),
         error: st.meta(META_ERROR).ok().flatten().filter(|e| !e.is_empty()),
         running: RUNNING.load(Ordering::SeqCst),
+        cloud: crate::cloud::key_meta(st).is_some(),
     }
 }
 
@@ -133,11 +136,16 @@ pub async fn backup_password(app: AppHandle, password: String) -> Res<Status> {
     if !cfg!(desktop) {
         return Err("Копии делает «Полка» на компьютере".into());
     }
+    // Облако зашифровано тем же паролем: его ключ перешифровывается вместе с паролем копий.
+    let cloud_key = crate::cloud::key_meta(&*app.state::<AppState>().store()?);
     let mut bytes = password.into_bytes();
-    let key = tauri::async_runtime::spawn_blocking(move || {
+    let (key, cloud_file) = tauri::async_runtime::spawn_blocking(move || {
         let made = std::str::from_utf8(&bytes).map_err(err).and_then(|p| {
+            // Новый пароль — не из самых простых: им шифруются и копии, и облако.
             backup::check_new_password(p).map_err(err)?;
-            BackupKey::new(p).map_err(err)
+            let key = BackupKey::new(p).map_err(err)?;
+            let cloud_file = cloud_key.as_deref().map(|ck| crate::cloud::rewrap(ck, p)).transpose()?;
+            Ok((key, cloud_file))
         });
         bytes.fill(0);
         std::hint::black_box(&bytes);
@@ -148,6 +156,9 @@ pub async fn backup_password(app: AppHandle, password: String) -> Res<Status> {
     let state = app.state::<AppState>();
     let st = state.store()?;
     st.set_meta(META_KEY, &key.to_meta()).map_err(err)?;
+    if let Some(kf) = cloud_file {
+        crate::cloud::save_keyfile(&st, &kf)?;
+    }
     Ok(status_of(&app, &st))
 }
 

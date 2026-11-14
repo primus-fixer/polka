@@ -255,6 +255,21 @@ pub fn search_films(http: &dyn Http, query: &str, keys: &Keys) -> Found {
 }
 
 /// Перед выбором обложки — подробности: другие обложки книги, сезоны и режиссёр у кино.
+/// Добавление по ссылке. Кинопоиск — по номеру из адреса через ПоискКино (его страницы программе
+/// не отдаются), остальное — по разметке страницы.
+pub fn from_link(http: &dyn Http, url: &str, keys: &Keys) -> Result<Candidate> {
+    match link::kinopoisk_id(url) {
+        Some(id) => {
+            let key = keys.poiskkino.as_deref().unwrap_or("");
+            if key.trim().is_empty() {
+                return Err(Error::Net("Ссылки Кинопоиска открываются через ПоискКино — укажите ключ ПоискКино в настройках".into()));
+            }
+            poiskkino::details(http, &id, key)
+        }
+        None => link::from_link(http, url),
+    }
+}
+
 pub fn details(http: &dyn Http, c: &Candidate, keys: &Keys) -> Candidate {
     let mut out = c.clone();
     if c.kind.is_screen() {
@@ -429,6 +444,23 @@ mod tests {
             c.covers.push(CoverOption { url: cover.into(), source: source.into(), edition: String::new() });
         }
         c
+    }
+
+    #[test]
+    fn kinopoisk_links_go_through_poiskkino() {
+        let brat = r#"{"id":41519,"name":"Брат","type":"movie","year":1997,"poster":{"url":"https://image.example/brat.jpg"}}"#;
+        let http = Fake::default().route("https://api.poiskkino.dev/v1.4/movie/41519", 200, brat);
+        let url = "https://www.kinopoisk.ru/film/41519/?utm_source=share";
+        let no_key = from_link(&http, url, &Keys::default()).unwrap_err().to_string();
+        assert!(no_key.contains("ключ ПоискКино"), "{no_key}");
+        let keys = Keys { poiskkino: Some("KEY".into()), ..Keys::default() };
+        let c = from_link(&http, url, &keys).unwrap();
+        assert_eq!((c.title.as_str(), c.kind, c.year.as_deref()), ("Брат", Kind::Film, Some("1997")));
+        assert_eq!(c.covers[0].url, "https://image.example/brat.jpg");
+        assert!(http.seen.lock().unwrap().iter().all(|u| !u.contains("kinopoisk.ru")), "страницу Кинопоиска не запрашиваем");
+        // Другие ссылки — по разметке страницы.
+        let page = Fake::default().route("https://www.litres.ru/", 200, r#"<meta property="og:title" content="Лавр"><meta property="og:image" content="https://www.litres.ru/c.jpg">"#);
+        assert_eq!(from_link(&page, "https://www.litres.ru/book/lavr/", &keys).unwrap().title, "Лавр");
     }
 
     #[test]
