@@ -3,6 +3,7 @@ import type { Filter, Nav } from '../App';
 import { api, message, type Goal, type Title } from '../api';
 import { dayShort, monthTitle, plural } from '../format';
 import { stored } from '../storage';
+import { haystack, textMatches } from '../translit';
 import { Bar, Cover, Icon, Seg, shortBy } from '../ui';
 
 export const FILTERS: [Filter, string][] = [
@@ -43,14 +44,10 @@ export function readSort(): ShelfSort {
   return { order: ORDERS.some(([k]) => k === o) ? (o as Order) : null, tag: stored('polka.tag', '') || null };
 }
 
-const fold = (s: string) => s.toLocaleLowerCase('ru').replace(/ё/g, 'е');
-
-/** Поиск по полке: каждое слово запроса — в названии, авторе, метках или заметке. */
+/** Поиск по полке: каждое слово запроса — в названии, авторе, метках или заметке; с транслитом. */
 export function matches(t: Title, query: string): boolean {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const hay = fold([t.title, t.original ?? '', ...t.creators, ...t.tags, t.note ?? ''].join('\n'));
-  return words.every((w) => hay.includes(w));
+  if (!query.trim()) return true;
+  return textMatches(haystack([t.title, t.original ?? '', ...t.creators, ...t.tags, t.note ?? ''].join('\n')), query);
 }
 
 const collator = new Intl.Collator('ru', { sensitivity: 'base', numeric: true });

@@ -3,17 +3,16 @@ import type { Nav } from '../App';
 import { api, isMobileApp, message, photoToDataUrl, scanIsbn, type BookFormat, type Candidate, type CoverOption, type Found, type Kind, type Status, type Title } from '../api';
 import { plural, todayIso } from '../format';
 import { parseShared } from '../share';
+import { sameTitle } from '../translit';
 import { Cover, Header, Icon, RatingPicker, Seg, TagPicker, palette } from '../ui';
 import { FORMATS, STATUS } from './Card';
 
 const coverLabel = (o: CoverOption) => [o.source, o.edition].filter(Boolean).join(' · ');
 
-/** Название без регистра, «ё» и знаков — чтобы узнать уже добавленное. */
-const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-
-export function onShelf(titles: Title[], c: Pick<Candidate, 'title' | 'kind'>): Title | undefined {
-  const key = norm(c.title);
-  return titles.find((t) => norm(t.title) === key && (t.kind === 'book') === (c.kind === 'book'));
+/** Уже на полке: то же название без регистра, «ё», знаков — и как бы ни было набрано, кириллицей или латиницей. */
+export function onShelf(titles: Title[], c: Pick<Candidate, 'title' | 'kind' | 'original'>): Title | undefined {
+  const names = [c.title, c.original].filter((x): x is string => !!x);
+  return titles.find((t) => (t.kind === 'book') === (c.kind === 'book') && [t.title, t.original].some((x) => !!x && names.some((n) => sameTitle(x, n))));
 }
 
 export default function Add({ titles, nav, replace, shared }: { titles: Title[]; nav: Nav; replace?: Title; shared?: string }) {

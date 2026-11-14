@@ -13,13 +13,13 @@ const GAP = 20;
 /** Больше обложек в коллаж не помещается: остальные — «+N» на последней. */
 const MAX_TILES = 18;
 
-const BG = '#15232D';
-const INK = '#FFFFFF';
-const MUTED = '#A9B8C2';
-const LINE = 'rgba(255,255,255,0.14)';
+export const BG = '#15232D';
+export const INK = '#FFFFFF';
+export const MUTED = '#A9B8C2';
+export const LINE = 'rgba(255,255,255,0.14)';
 
-const NUM_FONT = "'Geologica', 'Golos Text', Arial, sans-serif";
-const TEXT_FONT = "'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif";
+export const NUM_FONT = "'Geologica', 'Golos Text', Arial, sans-serif";
+export const TEXT_FONT = "'Golos Text', 'Segoe UI', Roboto, Arial, sans-serif";
 
 export type YearInput = {
   year: number;
@@ -49,13 +49,13 @@ export function grid(n: number, width: number, height: number): { cols: number; 
   return best;
 }
 
-function setSpacing(ctx: CanvasRenderingContext2D, px: number) {
+export function setSpacing(ctx: CanvasRenderingContext2D, px: number) {
   // Не везде есть — без него просто плотнее.
   if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${px}px`;
 }
 
 /** Строка, урезанная до ширины: «Длинное назва…». */
-function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+export function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
   if (ctx.measureText(text).width <= max) return text;
   let s = text;
   while (s.length > 1 && ctx.measureText(s + '…').width > max) s = s.slice(0, -1);
@@ -63,7 +63,7 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
 }
 
 /** Перенос по словам, не больше `lines` строк. */
-function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
   const out: string[] = [];
   let cur = '';
   for (const word of text.split(/\s+/).filter(Boolean)) {
@@ -84,7 +84,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: n
   return out.map((l) => fit(ctx, l, max));
 }
 
-async function loadImage(blob: Blob, urls: string[]): Promise<HTMLImageElement> {
+export async function loadImage(blob: Blob, urls: string[]): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(blob);
   urls.push(url);
   const img = new Image();
@@ -94,24 +94,24 @@ async function loadImage(blob: Blob, urls: string[]): Promise<HTMLImageElement> 
 }
 
 /** Обложка «как object-fit: cover» со скруглёнными углами. */
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+export function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, r = 10) {
   const nw = img.naturalWidth || w;
   const nh = img.naturalHeight || h;
   const s = Math.max(w / nw, h / nh);
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 10);
+  ctx.roundRect(x, y, w, h, r);
   ctx.clip();
   ctx.drawImage(img, x + (w - nw * s) / 2, y + (h - nh * s) / 2, nw * s, nh * s);
   ctx.restore();
 }
 
 /** Без обложки — плашка цвета названия, как на полке. */
-function drawPlaceholder(ctx: CanvasRenderingContext2D, t: Title, x: number, y: number, w: number, h: number) {
+export function drawPlaceholder(ctx: CanvasRenderingContext2D, t: Title, x: number, y: number, w: number, h: number, r = 10) {
   const [bg, fg] = palette(t.title);
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 10);
+  ctx.roundRect(x, y, w, h, r);
   ctx.fillStyle = bg;
   ctx.fill();
   ctx.clip();
@@ -145,12 +145,21 @@ function bigNumber(ctx: CanvasRenderingContext2D, text: string, x: number, y: nu
   ctx.fillText(text, x, y);
 }
 
-/** Рисует картинку года и отдаёт PNG. */
-export async function drawYear({ year, stats, titles, cover }: YearInput): Promise<Blob> {
-  // Шрифты приложения подгружаются по требованию: без этого холст нарисует запасным.
+/** Шрифты приложения подгружаются по требованию: без этого холст нарисует запасным. */
+export async function loadFonts() {
   await Promise.all(
     [`500 112px Geologica`, `400 84px Geologica`, `500 26px Geologica`, `400 28px "Golos Text"`, `600 28px "Golos Text"`].map((f) => document.fonts?.load(f).catch(() => undefined)),
   );
+}
+
+/** Холст в PNG. */
+export function toPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Картинка не собралась'))), 'image/png'));
+}
+
+/** Рисует картинку года и отдаёт PNG. */
+export async function drawYear({ year, stats, titles, cover }: YearInput): Promise<Blob> {
+  await loadFonts();
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -281,7 +290,7 @@ export async function drawYear({ year, stats, titles, cover }: YearInput): Promi
     ctx.fillText('Полка — книги, фильмы и сериалы', W - PAD, H - 40);
     ctx.textAlign = 'left';
 
-    return await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Картинка не собралась'))), 'image/png'));
+    return await toPng(canvas);
   } finally {
     urls.forEach((u) => URL.revokeObjectURL(u));
   }

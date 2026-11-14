@@ -32,7 +32,14 @@ export function parseShared(text: string): Shared {
   return { url: url && url.length > 'https://'.length + 3 ? url : null, title: title.length >= 2 ? title : '', kind };
 }
 
-type Bridge = { take(): string | null; sendImage?(base64: string, name: string): boolean };
+type Bridge = {
+  take(): string | null;
+  takeOpen?(): string | null;
+  setWidget?(json: string): void;
+  sendImage?(base64: string, name: string): boolean;
+  canSaveImage?(): boolean;
+  saveImage?(base64: string, name: string): string | null;
+};
 
 function bridge(): Bridge | undefined {
   return (window as unknown as { PolkaShare?: Bridge }).PolkaShare;
@@ -43,12 +50,52 @@ export function canShareImage(): boolean {
   return typeof bridge()?.sendImage === 'function';
 }
 
+/** Android 10 и новее: картинку можно положить прямо в «Галерею» (Изображения/Полка). */
+export function canSaveToGallery(): boolean {
+  try {
+    return bridge()?.canSaveImage?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Кладёт картинку в «Изображения/Полка»; возвращает, куда легла, или null. */
+export function saveToGallery(base64: string, name: string): string | null {
+  try {
+    return bridge()?.saveImage?.(base64, name) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Открывает «Поделиться» с картинкой (PNG в base64). */
 export function shareImage(base64: string, name: string): boolean {
   try {
     return bridge()?.sendImage?.(base64, name) ?? false;
   } catch {
     return false;
+  }
+}
+
+/** Запись, которую открыли из виджета: номер; «» — просто «Полка»; null — ничего. */
+export function takeOpened(): string | null {
+  try {
+    return bridge()?.takeOpen?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Виджет «Сейчас» на главном экране Android: есть ли он в этой сборке. */
+export function canWidget(): boolean {
+  return typeof bridge()?.setWidget === 'function';
+}
+
+export function setWidget(json: string) {
+  try {
+    bridge()?.setWidget?.(json);
+  } catch {
+    /* виджет обновится при следующем изменении */
   }
 }
 

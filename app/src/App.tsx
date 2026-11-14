@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, message, type Goal, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
-import { takeShared } from './share';
+import { takeOpened, takeShared } from './share';
+import { pushWidget } from './widget';
 import { store, stored } from './storage';
 import { Icon } from './ui';
 import Add from './screens/Add';
@@ -116,6 +117,12 @@ export default function App() {
   useEffect(() => {
     if (!loaded) return;
     const check = () => {
+      // Из виджета «Сейчас»: открыть запись (или просто «Полку»).
+      const open = takeOpened();
+      if (open) {
+        setHistory([{ name: 'home' }]);
+        setRoute({ name: 'card', id: open });
+      }
       const text = takeShared();
       if (!text) return;
       setHistory([{ name: 'home' }]);
@@ -130,6 +137,13 @@ export default function App() {
       window.removeEventListener('focus', check);
     };
   }, [loaded]);
+
+  // Виджет «Сейчас» на главном экране Android — после изменений полки.
+  useEffect(() => {
+    if (!loaded) return;
+    const id = window.setTimeout(() => pushWidget(titles).catch(() => undefined), 800);
+    return () => window.clearTimeout(id);
+  }, [titles, loaded]);
 
   useEffect(() => {
     if (!toast) return;

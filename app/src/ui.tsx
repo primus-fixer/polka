@@ -160,7 +160,7 @@ export function Row({ label, children }: { label: string; children: ReactNode })
 
 export function Header({ title, onBack, backLabel = 'Назад', right }: { title?: string; onBack: () => void; backLabel?: string; right?: ReactNode }) {
   return (
-    <div className="topbar">
+    <div className={'topbar' + (right ? ' with-right' : '')}>
       <button type="button" className="icon-btn" aria-label={backLabel} onClick={onBack}>
         <Icon name="left" size={24} stroke={2} />
       </button>

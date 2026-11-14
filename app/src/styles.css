@@ -972,6 +972,16 @@ p {
   margin: -8px -10px -6px;
 }
 
+/* Справа в шапке может быть несколько кнопок: «Поделиться» и «Изменить». */
+.topbar.with-right {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.topbar-tools {
+  display: flex;
+  gap: 2px;
+}
+
 .topbar-title {
   margin: 0;
   font-family: var(--num);
@@ -1601,6 +1611,14 @@ p {
   display: grid;
   place-items: center;
   min-height: 200px;
+}
+
+.sheet-actions {
+  flex-wrap: wrap;
+}
+
+.sheet-actions .btn {
+  white-space: nowrap;
 }
 
 .year-pic img {
