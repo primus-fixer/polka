@@ -1,0 +1,19 @@
+[package]
+name = "polka-cloud"
+description = "Облако «Полки»: Яндекс Диск и свой сервер по WebDAV — вход и файлы"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+# Имитация сервера WebDAV — для проверок и сквозных тестов.
+mock = []
+
+[dependencies]
+base64 = "0.22"
+polka-core = { path = "../polka-core" }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3"
