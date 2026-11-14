@@ -39,6 +39,7 @@ type Bridge = {
   sendImage?(base64: string, name: string): boolean;
   canSaveImage?(): boolean;
   saveImage?(base64: string, name: string): string | null;
+  takeBook?(): string | null;
 };
 
 function bridge(): Bridge | undefined {
@@ -103,6 +104,16 @@ export function setWidget(json: string) {
 export function takeShared(): string | null {
   try {
     return bridge()?.take() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Книга, которую открыли «С помощью…» или прислали через «Поделиться» (Android):
+ *  имя файла в папке приложения; забрать можно один раз. */
+export function takeBook(): string | null {
+  try {
+    return bridge()?.takeBook?.() || null;
   } catch {
     return null;
   }

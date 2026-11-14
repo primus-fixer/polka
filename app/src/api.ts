@@ -1,5 +1,5 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { demo } from './demo';
+import { demo, demoBookImage } from './demo';
 import { todayIso } from './format';
 
 // Типы повторяют ответы ядра (polka-core, serde): пустые поля в ответе не приходят.
@@ -158,6 +158,28 @@ export type CloudStatus = {
 };
 export type CloudEvent = { running: boolean; received: number; step: CloudStep | null };
 
+// ——— Читалка ———
+
+export type FileFormat = 'epub' | 'fb2';
+export type BookMeta = { title: string; authors: string[]; lang?: string; year?: string; publisher?: string; isbn?: string; about?: string; genres: string[] };
+/** Глава: название и объём в знаках (по нему считается процент). */
+export type BookChapter = { title: string; size: number };
+export type TocItem = { title: string; chapter: number; anchor?: string; depth: number };
+export type BookView = { hash: string; format: FileFormat; meta: BookMeta; chapters: BookChapter[]; toc: TocItem[]; total: number; title: Title | null };
+/** Найденное в книге: место — в единицах UTF-16 от начала главы. */
+export type BookHit = { chapter: number; offset: number; len: number; before: string; found: string; after: string };
+/** Файл книги на этом устройстве и запись полки, к которой он привязан. */
+export type LocalBook = { hash: string; title: string; name: string; format: FileFormat; size: number; added: number };
+/** Где остановились (запись журнала — уходит на другие устройства); `years` — минуты чтения по годам. */
+export type Reading = { title: string; book: string; chapter: number; offset: number; percent: number; at: number; minutes: number; years?: Record<string, number> };
+export type MarkKind = 'bookmark' | 'quote';
+/** Закладка или цитата (запись журнала): место в книге, текст, своя заметка. */
+export type Mark = { id: string; title: string; book: string; kind: MarkKind; chapter: number; offset: number; end: number; text?: string; note?: string; percent: number; created: number };
+export type Imported = { hash: string; title: Title; created: boolean };
+/** Узел главы: текст или [тег, атрибуты, …дети] — страница строит его сама, без innerHTML. */
+export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
+export type BookDrop = { ok?: Imported; error?: string };
+
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
 
@@ -202,6 +224,33 @@ const real = {
       if (file.size === 0) break;
     }
     return id;
+  },
+  /** Файл книги: загрузить кусками, сохранить у себя, найти или завести запись на полке
+   *  (`title` — к какой записи привязать, если файл открыли из её карточки). */
+  bookImport: async (file: File, title: string | null, progress?: (done: number, total: number) => void): Promise<Imported> => {
+    const upload = await real.backupUpload(file, progress);
+    return invoke<Imported>('book_import', { upload, name: file.name, title, today: todayIso() });
+  },
+  /** Android: книга, открытая «С помощью…» или присланная через «Поделиться». */
+  bookImportIncoming: (name: string) => invoke<Imported>('book_import_incoming', { name, today: todayIso() }),
+  bookOpen: (hash: string) => invoke<BookView>('book_open', { hash, today: todayIso() }),
+  bookChapter: (hash: string, index: number) => invoke<BookNode[]>('book_chapter', { hash, index }),
+  bookSearch: (hash: string, query: string) => invoke<BookHit[]>('book_search', { hash, query }),
+  bookFiles: () => invoke<LocalBook[]>('book_files'),
+  bookForget: (hash: string) => invoke<void>('book_forget', { hash }),
+  readings: () => invoke<Reading[]>('reading_list'),
+  readingSave: (reading: Reading) => invoke<void>('reading_save', { reading }),
+  /** Закладки и цитаты: все или одной записи. */
+  marks: (title: string | null) => invoke<Mark[]>('marks', { title }),
+  /** Новая (без номера) или изменённая закладка или цитата. */
+  markSave: (mark: Mark) => invoke<Mark>('mark_save', { mark }),
+  markDelete: (id: string) => invoke<void>('mark_delete', { id }),
+  /** Внешняя ссылка из книги — в браузере. */
+  openLink: (url: string) => invoke<void>('open_link', { url }),
+  /** Компьютер: книгу перетащили в окно. */
+  onBook: async (listener: (e: BookDrop) => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<BookDrop>('book', (ev) => listener(ev.payload));
   },
   backupInspect: (id: string, password: string) => invoke<BackupInfo>('backup_inspect', { id, password }),
   backupRestore: (id: string, password: string) => invoke<RestoreResult>('backup_restore', { id, password }),
@@ -256,6 +305,12 @@ export function coverSrc(id: string): string | null {
   if (inApp) return convertFileSrc(id, 'cover');
   // Демо в браузере: обложка — сама картинка (data:).
   return id.startsWith('data:') ? id : null;
+}
+
+/** Адрес картинки из книги: её отдаёт протокол `book` приложения. */
+export function bookImageSrc(hash: string, path: string): string {
+  if (inApp) return convertFileSrc(`${hash}/${path}`, 'book');
+  return demoBookImage(path);
 }
 
 /** Сканирование QR-кода связи камерой телефона. */

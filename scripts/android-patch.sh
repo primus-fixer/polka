@@ -73,6 +73,38 @@ if ! grep -q 'android.intent.action.SEND' "$MANIFEST"; then
   mv "$MANIFEST.new" "$MANIFEST"
 fi
 
+# Книги EPUB и FB2: «Открыть с помощью → Полка» из файлового менеджера, загрузок браузера, Telegram,
+# и «Поделиться» файлом. FB2 Android не знает — такие файлы часто приходят как octet-stream или zip.
+if ! grep -q 'application/epub+zip' "$MANIFEST"; then
+  awk '
+    function types() {
+      print "                <data android:mimeType=\"application/epub+zip\" />"
+      print "                <data android:mimeType=\"application/x-fictionbook+xml\" />"
+      print "                <data android:mimeType=\"application/x-fictionbook\" />"
+      print "                <data android:mimeType=\"application/x-fb2\" />"
+      print "                <data android:mimeType=\"application/zip\" />"
+      print "                <data android:mimeType=\"application/octet-stream\" />"
+    }
+    /<\/activity>/ && !done {
+      print "            <intent-filter>"
+      print "                <action android:name=\"android.intent.action.VIEW\" />"
+      print "                <category android:name=\"android.intent.category.DEFAULT\" />"
+      print "                <data android:scheme=\"content\" />"
+      print "                <data android:scheme=\"file\" />"
+      types()
+      print "            </intent-filter>"
+      print "            <intent-filter>"
+      print "                <action android:name=\"android.intent.action.SEND\" />"
+      print "                <category android:name=\"android.intent.category.DEFAULT\" />"
+      types()
+      print "            </intent-filter>"
+      done = 1
+    }
+    { print }
+  ' "$MANIFEST" > "$MANIFEST.new"
+  mv "$MANIFEST.new" "$MANIFEST"
+fi
+
 # Картинка года уходит в «Поделиться» через FileProvider из шаблона Tauri; если его нет — добавляем.
 if ! grep -q 'androidx.core.content.FileProvider' "$MANIFEST"; then
   awk '
@@ -114,10 +146,12 @@ if [ -n "$ACTIVITY" ] && ! grep -q PolkaShare "$ACTIVITY"; then
     echo
     echo "import android.content.ContentValues"
     echo "import android.content.Intent"
+    echo "import android.net.Uri"
     echo "import android.os.Build"
     echo "import android.os.Bundle"
     echo "import android.os.Environment"
     echo "import android.provider.MediaStore"
+    echo "import android.provider.OpenableColumns"
     echo "import android.util.Base64"
     echo "import android.webkit.JavascriptInterface"
     echo "import android.webkit.WebView"
@@ -132,6 +166,9 @@ class MainActivity : TauriActivity() {
   private val shared = AtomicReference<String?>(null)
   /** Запись, которую открыли из виджета («» — просто «Полка»). */
   private val opened = AtomicReference<String?>(null)
+  /** Файл книги в кеше приложения (имя), пока его не забрала страница. */
+  private val book = AtomicReference<String?>(null)
+  private var web: WebView? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
 KT
@@ -149,6 +186,7 @@ KT
 
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    web = webView
     webView.addJavascriptInterface(ShareBridge(), "PolkaShare")
   }
 
@@ -158,10 +196,63 @@ KT
       opened.set(intent.getStringExtra("id") ?: "")
       return
     }
+    if (intent.action == Intent.ACTION_VIEW) {
+      intent.data?.let { receiveBook(it) }
+      return
+    }
     if (intent.action != Intent.ACTION_SEND) return
+    val stream = streamOf(intent)
+    if (stream != null && intent.type?.startsWith("text/") != true) {
+      receiveBook(stream)
+      return
+    }
     val parts = listOfNotNull(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
     val text = parts.map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
     if (text.isNotEmpty()) shared.set(text.take(4000))
+  }
+
+  @Suppress("DEPRECATION")
+  private fun streamOf(intent: Intent): Uri? =
+    if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+    else intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
+
+  /** Книга — копией в кеш приложения (не больше 100 МБ); страница заберёт её: PolkaShare.takeBook(). */
+  private fun receiveBook(uri: Uri) {
+    val resolver = contentResolver
+    Thread {
+      var file: File? = null
+      try {
+        var name = uri.lastPathSegment ?: "book"
+        if (uri.scheme == "content") {
+          resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0)?.let { name = it }
+          }
+        }
+        val safe = name.substringAfterLast('/').replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").take(120).ifBlank { "book" }
+        val dir = File(cacheDir, "incoming").apply { mkdirs() }
+        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
+        val target = File(dir, "${System.currentTimeMillis()}-$safe")
+        file = target
+        val input = resolver.openInputStream(uri) ?: return@Thread
+        input.use { src ->
+          target.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+              val n = src.read(buf)
+              if (n < 0) break
+              total += n
+              if (total > 100L * 1024 * 1024) throw IllegalStateException("слишком большой файл")
+              out.write(buf, 0, n)
+            }
+          }
+        }
+        book.set(target.name)
+        runOnUiThread { web?.evaluateJavascript("window.dispatchEvent(new Event('polka-book'))", null) }
+      } catch (e: Exception) {
+        file?.delete()
+      }
+    }.start()
   }
 
   inner class ShareBridge {
@@ -171,6 +262,10 @@ KT
     /** Запись из виджета: номер, «» — просто открыть, null — ничего. */
     @JavascriptInterface
     fun takeOpen(): String? = opened.getAndSet(null)
+
+    /** Книга, открытая «С помощью…» или присланная через «Поделиться»: имя файла в кеше. */
+    @JavascriptInterface
+    fun takeBook(): String? = book.getAndSet(null)
 
     /** Что показать в виджете «Сейчас»: JSON от страницы. */
     @JavascriptInterface

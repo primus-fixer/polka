@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Filter, Nav } from '../App';
+import type { Filter, Library, Nav } from '../App';
 import { api, message, type Goal, type Title } from '../api';
 import { dayShort, monthTitle, plural } from '../format';
 import { stored } from '../storage';
 import { haystack, textMatches } from '../translit';
 import { Bar, Cover, Icon, Seg, shortBy } from '../ui';
+import { readPct } from './Card';
 
 export const FILTERS: [Filter, string][] = [
   ['all', 'Всё'],
@@ -110,9 +111,10 @@ type Props = {
   setQuery: (q: string | null) => void;
   sort: ShelfSort;
   setSort: (s: ShelfSort) => void;
+  library: Library;
 };
 
-export default function Home({ titles, nav, wide, view, setView, filter, setFilter, goal, year, query, setQuery, sort, setSort }: Props) {
+export default function Home({ titles, nav, wide, view, setView, filter, setFilter, goal, year, query, setQuery, sort, setSort, library }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [sorting, setSorting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -295,7 +297,11 @@ export default function Home({ titles, nav, wide, view, setView, filter, setFilt
           <div className="now" style={{ gridTemplateColumns: `repeat(${wide ? 3 : 1}, minmax(0, 1fr))` }}>
             {now.map((t) => {
               const s = t.kind === 'series' ? seriesLine(t) : null;
-              const line = s ? s.text : [t.kind === 'book' ? shortBy(t) : t.year, t.started && `с ${dayShort(t.started)}`].filter(Boolean).join(' · ');
+              const book = t.kind === 'book' ? library.files.find((f) => f.title === t.id) : undefined;
+              const reading = t.kind === 'book' ? library.readings.find((r) => r.title === t.id && r.percent >= 0.5) : undefined;
+              const line = s
+                ? s.text
+                : [t.kind === 'book' ? shortBy(t) : t.year, reading ? `прочитано ${readPct(reading.percent)}` : t.started && `с ${dayShort(t.started)}`].filter(Boolean).join(' · ');
               return (
                 <div key={t.id} className="now-row">
                   <button type="button" className="now-open" onClick={() => open(t)}>
@@ -304,9 +310,14 @@ export default function Home({ titles, nav, wide, view, setView, filter, setFilt
                       <span className="title">{t.title}</span>
                       <span className="sub">{line}</span>
                       {s && <Bar pct={s.pct} color="var(--work)" />}
+                      {reading && <Bar pct={reading.percent} />}
                     </span>
                   </button>
-                  {(!s || s.next) && (
+                  {book ? (
+                    <button type="button" className="btn line small" style={{ color: 'var(--own)' }} aria-label={`Читать: ${t.title}`} onClick={() => nav.read(book.hash)}>
+                      Читать
+                    </button>
+                  ) : (!s || s.next) && (
                     <button
                       type="button"
                       className="btn line small"

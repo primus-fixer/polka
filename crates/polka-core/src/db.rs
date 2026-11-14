@@ -114,6 +114,18 @@ impl Store {
         Ok(())
     }
 
+    pub fn delete_meta(&self, key: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM meta WHERE key = ?1", [key])?;
+        Ok(())
+    }
+
+    /// Местные значения, чьи ключи начинаются с `prefix` (в журнал они не попадают).
+    pub fn meta_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let mut st = self.conn.prepare("SELECT key, value FROM meta WHERE substr(key, 1, length(?1)) = ?1 ORDER BY key")?;
+        let rows = st.query_map([prefix], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+    }
+
     fn record(&mut self, body: EventBody) -> Result<()> {
         let device = self.device.clone();
         let tx = self.conn.transaction()?;
@@ -356,6 +368,20 @@ mod tests {
         // Открывается снова тем же ключом; чужим — нет.
         assert!(Store::open(&path, &KEY, "phone").is_ok());
         assert!(matches!(Store::open(&path, &[1u8; 32], "phone"), Err(Error::WrongKey)));
+    }
+
+    #[test]
+    fn local_meta_by_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = Store::open(&dir.path().join("polka.db"), &KEY, "phone").unwrap();
+        s.set_meta("book.b", "2").unwrap();
+        s.set_meta("book.a", "1").unwrap();
+        s.set_meta("bookmark", "нет").unwrap();
+        s.set_meta("book_%", "нет").unwrap();
+        assert_eq!(s.meta_prefix("book.").unwrap(), [("book.a".to_string(), "1".to_string()), ("book.b".to_string(), "2".to_string())]);
+        s.delete_meta("book.a").unwrap();
+        assert_eq!(s.meta_prefix("book.").unwrap().len(), 1);
+        assert_eq!(s.event_count().unwrap(), 0, "местное — не в журнал");
     }
 
     #[test]

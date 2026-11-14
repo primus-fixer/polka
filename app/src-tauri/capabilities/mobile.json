@@ -1,8 +1,17 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Камера телефона — для штрихкода книги",
-  "platforms": ["android", "iOS"],
-  "windows": ["main"],
-  "permissions": ["barcode-scanner:default"]
+  "description": "Камера телефона — для штрихкода книги; кнопка «Назад» в читалке",
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "barcode-scanner:default",
+    "core:app:allow-register-listener",
+    "core:app:allow-remove-listener"
+  ]
 }
