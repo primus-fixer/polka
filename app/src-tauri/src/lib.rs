@@ -516,7 +516,10 @@ pub fn run() {
             let db = dir.join("polka.db");
             let me = load_identity(&dir)?;
             let key = load_key(&dir, &db)?;
-            let store = Store::open(&db, &key, &me.id).map_err(err)?;
+            let mut store = Store::open(&db, &key, &me.id).map_err(err)?;
+            // Файлы книг: своя папка; открытые до 0.8.0 — записать в журнал, чтобы о них узнали другие устройства.
+            store.set_books_dir(dir.join("books"));
+            let _ = polka_core::files::adopt(&mut store);
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
@@ -584,6 +587,10 @@ pub fn run() {
             reader::book_chapter,
             reader::book_data,
             reader::book_cover,
+            reader::book_elsewhere,
+            reader::book_unskip,
+            reader::files_settings,
+            reader::files_set,
             reader::book_search,
             reader::book_files,
             reader::book_forget,

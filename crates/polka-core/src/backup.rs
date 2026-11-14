@@ -7,11 +7,14 @@
 //! перестановка и обрезка любого куска видны при чтении.
 //!
 //! Файл: заголовок (130 байт: магия, формат, параметры ключа, соль, зашифрованный ключ файла)
-//! и куски. Внутри кусков — записи: сведения о копии, пачки событий, вложения и итог.
+//! и куски. Внутри кусков — записи: сведения о копии, пачки событий, вложения, файлы книг
+//! (с 0.8.0, если они включены в копию; кусками по 8 МБ) и итог. Старые версии записи о файлах
+//! книг пропускают.
 //! Восстановление добавляет события к базе так же, как синхронизация: повторы
 //! пропускаются, при споре побеждает более позднее изменение.
 
 use crate::db::{Event, Store};
+use crate::files::{self, BookFile};
 use crate::error::{Error, Result};
 use crate::model::{Title, KIND};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -48,6 +51,8 @@ const BATCH: usize = 500;
 const REC_MANIFEST: u8 = 1;
 const REC_EVENTS: u8 = 2;
 const REC_BLOB: u8 = 3;
+/// Кусок файла книги (с 0.8.0).
+const REC_BOOK: u8 = 4;
 const REC_END: u8 = 0xFF;
 
 pub(crate) fn random<const N: usize>() -> Result<[u8; N]> {
@@ -237,6 +242,9 @@ pub struct Manifest {
     pub blobs: u64,
     /// Записей о книгах, фильмах и сериалах.
     pub titles: u64,
+    /// Файлов книг в копии (с 0.8.0).
+    #[serde(default)]
+    pub books: u64,
     /// Поля из более новых версий.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
@@ -261,6 +269,7 @@ impl Manifest {
             events,
             blobs,
             titles,
+            books: 0,
             extra: Default::default(),
         }
     }
@@ -271,6 +280,9 @@ impl Manifest {
 struct End {
     events: u64,
     blobs: u64,
+    /// Кусков файлов книг.
+    #[serde(default)]
+    books: u64,
 }
 
 /// Что записано.
@@ -278,6 +290,8 @@ struct End {
 pub struct Made {
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг.
+    pub books: u64,
     pub bytes: u64,
 }
 
@@ -302,6 +316,16 @@ pub struct Writer<W: Write> {
     bytes: u64,
     events: u64,
     blobs: u64,
+    /// Кусков файлов книг и самих файлов.
+    book_parts: u64,
+    books: u64,
+}
+
+/// Заголовок куска файла книги в копии.
+#[derive(Serialize, Deserialize)]
+struct BookPart {
+    file: BookFile,
+    offset: u64,
 }
 
 impl<W: Write> Writer<W> {
@@ -321,7 +345,7 @@ impl<W: Write> Writer<W> {
         out.write_all(&header)?;
         let enc = EncryptorBE32::from_aead(XChaCha20Poly1305::new((&dek).into()), stream_nonce.as_ref().into());
         wipe(&mut dek);
-        let mut w = Writer { out, enc: Some(enc), header, buf: Vec::with_capacity(CHUNK + 64), bytes: HEADER as u64, events: 0, blobs: 0 };
+        let mut w = Writer { out, enc: Some(enc), header, buf: Vec::with_capacity(CHUNK + 64), bytes: HEADER as u64, events: 0, blobs: 0, book_parts: 0, books: 0 };
         w.record(REC_MANIFEST, &serde_json::to_vec(manifest)?)?;
         Ok(w)
     }
@@ -379,9 +403,24 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Кусок файла книги: заголовок (длина и JSON) и данные.
+    pub fn book_part(&mut self, file: &BookFile, offset: u64, data: &[u8]) -> Result<()> {
+        let head = serde_json::to_vec(&BookPart { file: file.clone(), offset })?;
+        let mut p = Vec::with_capacity(4 + head.len() + data.len());
+        p.extend_from_slice(&(head.len() as u32).to_le_bytes());
+        p.extend_from_slice(&head);
+        p.extend_from_slice(data);
+        self.record(REC_BOOK, &p)?;
+        self.book_parts += 1;
+        if offset + data.len() as u64 >= file.size {
+            self.books += 1;
+        }
+        Ok(())
+    }
+
     /// Итог и последний кусок. Возвращает, сколько записано, и куда писали.
     pub fn finish(mut self) -> Result<(Made, W)> {
-        let end = serde_json::to_vec(&End { events: self.events, blobs: self.blobs })?;
+        let end = serde_json::to_vec(&End { events: self.events, blobs: self.blobs, books: self.book_parts })?;
         self.record(REC_END, &end)?;
         let enc = self.enc.take().ok_or_else(|| Error::Backup("копия уже закрыта".into()))?;
         let ct = enc
@@ -390,7 +429,7 @@ impl<W: Write> Writer<W> {
         self.buf.clear();
         self.frame(&ct, true)?;
         self.out.flush()?;
-        Ok((Made { events: self.events, blobs: self.blobs, bytes: self.bytes }, self.out))
+        Ok((Made { events: self.events, blobs: self.blobs, books: self.books, bytes: self.bytes }, self.out))
     }
 }
 
@@ -398,6 +437,8 @@ impl<W: Write> Writer<W> {
 pub enum Item {
     Events(Vec<Event>),
     Blob { id: String, mime: String, data: Vec<u8> },
+    /// Кусок файла книги с места `offset`.
+    Book { file: BookFile, offset: u64, data: Vec<u8> },
 }
 
 /// Чтение копии: ключ проверяется сразу, куски — по мере чтения.
@@ -413,6 +454,8 @@ pub struct Reader<R: Read> {
     ended: bool,
     events: u64,
     blobs: u64,
+    book_parts: u64,
+    books: u64,
     pub manifest: Manifest,
 }
 
@@ -480,7 +523,7 @@ impl<R: Read> Reader<R> {
         let dec = DecryptorBE32::from_aead(XChaCha20Poly1305::new((&dek_arr).into()), header[PREFIX + 72..].into());
         wipe(&mut dek_arr);
         let empty = Manifest::new(&MadeBy { app: String::new(), created: 0, device: String::new(), device_id: String::new() }, 0, 0, 0);
-        let mut r = Reader { input, dec: Some(dec), header, plain: Vec::new(), pos: 0, last: false, ended: false, events: 0, blobs: 0, manifest: empty };
+        let mut r = Reader { input, dec: Some(dec), header, plain: Vec::new(), pos: 0, last: false, ended: false, events: 0, blobs: 0, book_parts: 0, books: 0, manifest: empty };
         let (kind, payload) = r.record()?;
         if kind != REC_MANIFEST {
             return Err(broken("нет сведений о копии"));
@@ -581,9 +624,20 @@ impl<R: Read> Reader<R> {
                     self.blobs += 1;
                     return Ok(Some(Item::Blob { id, mime, data }));
                 }
+                REC_BOOK => {
+                    let bad = || broken("файл книги не читается");
+                    let len = u32::from_le_bytes(payload.get(..4).ok_or_else(bad)?.try_into().map_err(|_| bad())?) as usize;
+                    let head: BookPart = serde_json::from_slice(payload.get(4..4 + len).ok_or_else(bad)?).map_err(|_| bad())?;
+                    let data = payload[4 + len..].to_vec();
+                    self.book_parts += 1;
+                    if head.offset + data.len() as u64 >= head.file.size {
+                        self.books += 1;
+                    }
+                    return Ok(Some(Item::Book { file: head.file, offset: head.offset, data }));
+                }
                 REC_END => {
                     let end: End = serde_json::from_slice(&payload).map_err(|_| broken("итог не читается"))?;
-                    if end.events != self.events || end.blobs != self.blobs {
+                    if end.events != self.events || end.blobs != self.blobs || end.books != self.book_parts {
                         return Err(broken("не хватает записей"));
                     }
                     // Итог — последняя запись последнего куска.
@@ -607,6 +661,8 @@ pub struct Checked {
     pub manifest: Manifest,
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг в копии.
+    pub books: u64,
     /// События этого же устройства, которые расходятся с базой (копия с устройства,
     /// база которого была начата заново под тем же номером).
     pub conflicts: u64,
@@ -625,7 +681,7 @@ pub fn verify<R: Read>(mut r: Reader<R>, device: &str, mut conflict: impl FnMut(
             }
         }
     }
-    Ok(Checked { manifest: r.manifest.clone(), events: r.events, blobs: r.blobs, conflicts })
+    Ok(Checked { manifest: r.manifest.clone(), events: r.events, blobs: r.blobs, books: r.books, conflicts })
 }
 
 /// Событие этого устройства расходится с базой: под тем же номером записано другое.
@@ -638,18 +694,32 @@ pub fn conflicts_with(store: &Store, ev: &Event) -> Result<bool> {
 pub struct Restored {
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг легло на устройство.
+    pub books: u64,
 }
 
-/// Копия всей базы: события и все обложки.
+/// Копия всей базы: события, все обложки и — если так выбрано (`files.backup`) — файлы книг.
 pub fn write_store<W: Write>(store: &Store, key: &BackupKey, by: &MadeBy, out: W) -> Result<Made> {
     let events = store.events_missing(&Default::default())?;
     let blobs = store.present_blobs()?;
-    let manifest = Manifest::new(by, events.len() as u64, blobs.len() as u64, store.list::<Title>(KIND)?.len() as u64);
+    let books = if files::backup_on(store) { files::present(store)? } else { Vec::new() };
+    let mut manifest = Manifest::new(by, events.len() as u64, blobs.len() as u64, store.list::<Title>(KIND)?.len() as u64);
+    manifest.books = books.len() as u64;
     let mut w = Writer::new(out, key, &manifest)?;
     w.events(&events)?;
     for id in &blobs {
         if let Some((mime, data)) = store.blob(id)? {
             w.blob(id, &mime, &data)?;
+        }
+    }
+    for f in &books {
+        for k in 0..f.parts() {
+            let offset = k * files::PART as u64;
+            let Some((total, data)) = files::read_part(store, &f.id, offset)? else { break };
+            if total != f.size || data.is_empty() {
+                break;
+            }
+            w.book_part(f, offset, &data)?;
         }
     }
     Ok(w.finish()?.0)
@@ -666,6 +736,13 @@ pub fn restore_into<R: Read>(mut r: Reader<R>, store: &mut Store) -> Result<Rest
                 if !store.has_blob(&id)? {
                     store.put_blob_checked(&id, &mime, &data)?;
                     out.blobs += 1;
+                }
+            }
+            // Файл книги: если на устройстве его ещё нет. Испорченный не ляжет (сверка с отпечатком).
+            Item::Book { file, offset, data } => {
+                let fresh = store.books_dir().is_some_and(|d| files::path_in(d, &file.id).is_none());
+                if fresh && files::write_part(store, &file, offset, file.size, &data).unwrap_or(false) {
+                    out.books += 1;
                 }
             }
         }
@@ -733,7 +810,7 @@ mod tests {
 
         let mut dst = Store::open(&dir.path().join("b.db"), &[6u8; 32], "dev-b").unwrap();
         let r = restore_into(Reader::open(Cursor::new(&file), "книги на даче").unwrap(), &mut dst).unwrap();
-        assert_eq!(r, Restored { events: src.event_count().unwrap(), blobs: 2 });
+        assert_eq!(r, Restored { events: src.event_count().unwrap(), blobs: 2, books: 0 });
         assert_eq!(dst.list::<Title>(KIND).unwrap(), src.list::<Title>(KIND).unwrap());
         assert!(dst.missing_blobs().unwrap().is_empty(), "обложки на месте");
         // Новые записи на новом устройстве идут под его номером и не спорят со старыми.
@@ -758,6 +835,43 @@ mod tests {
         assert_eq!(src.event_count().unwrap(), before);
         assert_eq!(src.get::<Title>(KIND, "b").unwrap().unwrap().rating, Some(10));
         assert!(src.get::<Title>(KIND, "c").unwrap().is_none());
+    }
+
+    /// Файлы книг идут в копию только по своему переключателю и восстанавливаются целиком.
+    #[test]
+    fn book_files_in_backup_only_when_chosen() {
+        use crate::files::{BookFile, BACKUP_KEY, FILE, PART};
+        use crate::reader::BookFormat;
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = demo_store(dir.path(), "a.db", "aaaa");
+        s.set_books_dir(dir.path().join("a-books"));
+        let data: Vec<u8> = (0..(PART + 500)).map(|i| (i % 239) as u8).collect();
+        let id = crate::db::blob_id(&data);
+        let d = s.books_dir().unwrap().to_path_buf();
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join(format!("{id}.epub")), &data).unwrap();
+        let t = s.list::<Title>(KIND).unwrap()[0].id.clone();
+        s.put(FILE, &id, &BookFile { id: id.clone(), title: t, name: "b.epub".into(), format: BookFormat::Epub, size: data.len() as u64, added: 1 }).unwrap();
+        let key = BackupKey::new_with("книги на даче", FAST).unwrap();
+        let mut small = Vec::new();
+        assert_eq!(write_store(&s, &key, &by(), &mut small).unwrap().books, 0, "без переключателя файлов книг в копии нет");
+        s.set_meta(BACKUP_KEY, "1").unwrap();
+        let mut big = Vec::new();
+        let made = write_store(&s, &key, &by(), &mut big).unwrap();
+        assert_eq!(made.books, 1);
+        assert!(big.len() >= small.len() + data.len());
+        let checked = verify(Reader::open(Cursor::new(&big), "книги на даче").unwrap(), "", |_| Ok(false)).unwrap();
+        assert_eq!((checked.books, checked.manifest.books), (1, 1));
+        // Новое устройство: записи и файл книги.
+        let mut fresh = Store::open(&dir.path().join("b.db"), &[3u8; 32], "bbbb").unwrap();
+        fresh.set_books_dir(dir.path().join("b-books"));
+        let r = restore_into(Reader::open(Cursor::new(&big), "книги на даче").unwrap(), &mut fresh).unwrap();
+        assert_eq!(r.books, 1);
+        let got = crate::files::path_in(fresh.books_dir().unwrap(), &id).unwrap();
+        assert_eq!(std::fs::read(got).unwrap(), data);
+        // Повторное восстановление ничего не добавляет.
+        let r = restore_into(Reader::open(Cursor::new(&big), "книги на даче").unwrap(), &mut fresh).unwrap();
+        assert_eq!(r.books, 0);
     }
 
     #[test]

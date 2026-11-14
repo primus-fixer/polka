@@ -4,6 +4,7 @@ import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
 import BackupSection from './Backup';
+import BookFilesSection from './BookFiles';
 import CloudSection from './Cloud';
 import WifiSection from './Wifi';
 
@@ -170,6 +171,8 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
 
       <CloudSection />
 
+      <BookFilesSection nav={nav} onChange={onSynced} />
+
       <BackupSection nav={nav} />
 
       <section className="stack-s">
@@ -180,7 +183,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.6.0</p>
+      <p className="small muted3">Полка {__APP_VERSION__}</p>
     </div>
   );
 }

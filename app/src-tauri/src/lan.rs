@@ -199,7 +199,7 @@ fn done(app: &AppHandle, id: &str, r: &Result<SyncReport, String>) {
         }),
         Err(e) => update(app, id, |p| p.error = Some(e.clone())),
     }
-    let received = r.as_ref().map(|r| r.received + r.files_received).unwrap_or(0);
+    let received = r.as_ref().map(|r| r.received + r.files_received + r.books_received).unwrap_or(0);
     let _ = app.emit("lan", LanEvent { received, paired: None });
 }
 
@@ -596,7 +596,7 @@ async fn pair_at(app: AppHandle, addrs: Vec<SocketAddr>, code: String) -> Res<Pa
             match lan::pair_join(addr, &code, &state.store, &state.id, &state.name, &|peer, key| remember(&a, peer, key)) {
                 Ok((peer, rep)) => {
                     done(&a, &peer.device, &Ok(rep.clone()));
-                    let _ = a.emit("lan", LanEvent { received: rep.received + rep.files_received, paired: Some(peer.name.clone()) });
+                    let _ = a.emit("lan", LanEvent { received: rep.received + rep.files_received + rep.books_received, paired: Some(peer.name.clone()) });
                     return Ok((peer, rep));
                 }
                 // Нет связи по этому адресу — пробуем следующий; ответ устройства — окончательный.

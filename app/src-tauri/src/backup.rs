@@ -49,6 +49,9 @@ pub struct Last {
     pub bytes: u64,
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг в копии (с 0.8.0).
+    #[serde(default)]
+    pub books: u64,
 }
 
 #[derive(Serialize)]
@@ -268,7 +271,7 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
     let _running = Running;
     let state = app.state::<AppState>();
     let at = polka_core::now_secs();
-    let (key, dir, events, blobs, manifest, tz) = {
+    let (key, dir, events, blobs, books, manifest, tz) = {
         let st = state.store()?;
         let key = st.meta(META_KEY).map_err(err)?.ok_or_else(|| "Сначала задайте пароль копии".to_string())?;
         let key = BackupKey::from_meta(&key).map_err(err)?;
@@ -276,8 +279,11 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
         let blobs = st.present_blobs().map_err(err)?;
         let by = MadeBy { app: APP_VERSION.into(), created: at, device: state.name.clone(), device_id: st.device().to_string() };
         let titles = st.list::<Title>(KIND).map_err(err)?.len() as u64;
-        let manifest = Manifest::new(&by, events.len() as u64, blobs.len() as u64, titles);
-        (key, dir_of(app, &st).0, events, blobs, manifest, crate::tz_minutes(&st))
+        let mut manifest = Manifest::new(&by, events.len() as u64, blobs.len() as u64, titles);
+        // Файлы книг — если так выбрано в настройках.
+        let books = if polka_core::files::backup_on(&st) { polka_core::files::present(&st).map_err(err)? } else { Vec::new() };
+        manifest.books = books.len() as u64;
+        (key, dir_of(app, &st).0, events, blobs, books, manifest, crate::tz_minutes(&st))
     };
     check_writable(&dir)?;
     let path = unique(&dir, &format!("Полка {} {}", if auto { "автокопия" } else { "копия" }, stamp(at, tz)));
@@ -292,12 +298,26 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
                 w.blob(id, &mime, &data).map_err(err)?;
             }
         }
+        for f in &books {
+            for k in 0..f.parts() {
+                let offset = k * polka_core::files::PART as u64;
+                let part = {
+                    let st = state.store()?;
+                    polka_core::files::read_part(&st, &f.id, offset).map_err(err)?
+                };
+                let Some((total, data)) = part else { break };
+                if total != f.size || data.is_empty() {
+                    break;
+                }
+                w.book_part(f, offset, &data).map_err(err)?;
+            }
+        }
         let (made, out) = w.finish().map_err(err)?;
         out.into_inner().map_err(|e| err(e.error()))?.sync_all().map_err(err)?;
         // Проверка: копия читается целиком сохранённым ключом и сходится по числу записей.
         let r = Reader::open_with_key(BufReader::new(File::open(&tmp).map_err(err)?), &key).map_err(err)?;
         let checked = backup::verify(r, "", |_| Ok(false)).map_err(err)?;
-        if (checked.events, checked.blobs) != (made.events, made.blobs) {
+        if (checked.events, checked.blobs, checked.books) != (made.events, made.blobs, made.books) {
             return Err("копия не сошлась при проверке".into());
         }
         std::fs::rename(&tmp, &path).map_err(err)?;
@@ -310,7 +330,7 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
             return Err(format!("Копия не сделана: {e}"));
         }
     };
-    let last = Last { at, path: path.display().to_string(), auto, bytes: made.bytes, events: made.events, blobs: made.blobs };
+    let last = Last { at, path: path.display().to_string(), auto, bytes: made.bytes, events: made.events, blobs: made.blobs, books: made.books };
     {
         let mut st = state.store()?;
         st.set_meta(META_LOCAL, &serde_json::to_string(&last).map_err(err)?).map_err(err)?;
@@ -454,6 +474,8 @@ pub struct Info {
     pub titles: u64,
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг в копии.
+    pub books: u64,
     pub bytes: u64,
 }
 
@@ -466,7 +488,7 @@ pub async fn backup_inspect(app: AppHandle, id: String, password: String) -> Res
         let bytes = std::fs::metadata(&path).map_err(|_| "Файл копии не загружен — выберите его снова".to_string())?.len();
         let c = check_file(&state, &path, &password)?;
         let m = c.manifest;
-        Ok(Info { created: m.created, device: m.device, app: m.app, titles: m.titles, events: c.events, blobs: c.blobs, bytes })
+        Ok(Info { created: m.created, device: m.device, app: m.app, titles: m.titles, events: c.events, blobs: c.blobs, books: c.books, bytes })
     })
     .await
     .map_err(err)?
@@ -476,6 +498,8 @@ pub async fn backup_inspect(app: AppHandle, id: String, password: String) -> Res
 pub struct Restored {
     pub events: u64,
     pub blobs: u64,
+    /// Файлов книг легло на устройство.
+    pub books: u64,
     /// Сколько записей прибавилось на полке.
     pub titles: u64,
     /// Полка после восстановления — экран обновляется сразу.
@@ -497,7 +521,7 @@ pub async fn backup_restore(app: AppHandle, id: String, password: String) -> Res
         let list = st.list::<Title>(KIND).map_err(err)?;
         drop(st);
         let _ = std::fs::remove_file(&path);
-        Ok(Restored { events: added.events, blobs: added.blobs, titles: list.len().saturating_sub(before) as u64, list })
+        Ok(Restored { events: added.events, blobs: added.blobs, books: added.books, titles: list.len().saturating_sub(before) as u64, list })
     })
     .await
     .map_err(err)?

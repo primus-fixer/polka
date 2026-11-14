@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 // декодеры (wasm) и цветовой профиль. Кладутся в сборку как есть (`pdfjs/…`), при разработке отдаются
 // прямо из node_modules — копий в репозитории нет.
 const PDFJS = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url));
+const VERSION = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string;
 const PDFJS_DIRS = ['cmaps', 'standard_fonts', 'wasm', 'iccs'];
 
 function pdfjsAssets(): Plugin {
@@ -39,6 +40,8 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [react(), pdfjsAssets()],
+  // Версия «Полки» для экрана настроек — из package.json.
+  define: { __APP_VERSION__: JSON.stringify(VERSION) },
   clearScreen: false,
   server: {
     port: 1420,

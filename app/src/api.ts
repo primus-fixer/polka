@@ -99,7 +99,7 @@ export type YearStats = {
 export type Settings = { goal: Goal; has_poiskkino: boolean; has_google: boolean; key_method: string };
 
 export type BackupEvery = 'day' | 'week' | 'off';
-export type BackupLast = { at: number; path: string; auto: boolean; bytes: number; events: number; blobs: number };
+export type BackupLast = { at: number; path: string; auto: boolean; bytes: number; events: number; blobs: number; books?: number };
 export type BackupStatus = {
   /** Копии делает это устройство (компьютер). */
   desktop: boolean;
@@ -117,8 +117,8 @@ export type BackupStatus = {
   /** Подключено облако: оно зашифровано тем же паролем. */
   cloud: boolean;
 };
-export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; bytes: number };
-export type RestoreResult = { events: number; blobs: number; titles: number; list: Title[] };
+export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; books: number; bytes: number };
+export type RestoreResult = { events: number; blobs: number; books: number; titles: number; list: Title[] };
 
 /** Показанный код связи: «6WVG-HEWK», сколько секунд ещё действует, сколько попыток осталось; QR — код и адрес для телефона. */
 export type LanCode = { code: string; secs: number; left: number; wrong: number; qr_svg: string; hosts: string[]; port: number };
@@ -133,8 +133,8 @@ export type LanEvent = { received: number; paired: string | null };
 
 /** Облако: Яндекс Диск по паролю приложения или свой сервер WebDAV. */
 export type CloudProvider = 'yadisk' | 'webdav';
-export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number };
-export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; problems: string[] };
+export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number } | { step: 'books'; done: number; total: number };
+export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; books_received?: number; books_sent?: number; books_waiting?: number; problems: string[] };
 export type CloudProblem = { kind: 'auth' | 'space' | 'offline' | 'server' | 'gone' | 'replaced' | 'conflict' | 'newer' | 'format' | 'cancelled'; text: string; at: number };
 export type CloudStatus = {
   desktop: boolean;
@@ -176,6 +176,10 @@ export type MarkKind = 'bookmark' | 'quote';
 /** Закладка или цитата (запись журнала): место в книге, текст, своя заметка. */
 export type Mark = { id: string; title: string; book: string; kind: MarkKind; chapter: number; offset: number; end: number; text?: string; note?: string; percent: number; created: number };
 export type Imported = { hash: string; title: Title; created: boolean; format: FileFormat };
+/** Файл книги на другом устройстве (запись пришла с журналом); `skipped` — убран отсюда, сам не придёт. */
+export type RemoteBook = { hash: string; title: string; name: string; format: FileFormat; size: number; skipped: boolean };
+/** Файлы книг на этом устройстве: обмен ими, в резервной копии ли они, сколько их здесь. */
+export type FilesSettings = { sync: boolean; backup: boolean; count: number; bytes: number };
 /** Узел главы: текст или [тег, атрибуты, …дети] — страница строит его сама, без innerHTML. */
 export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
 export type BookDrop = { ok?: Imported; error?: string };
@@ -242,6 +246,12 @@ const real = {
   bookData: (hash: string) => invoke<ArrayBuffer>('book_data', { hash }),
   /** Обложка PDF (первая страница картинкой) — если у записи её ещё нет. */
   bookCover: (hash: string, dataUrl: string) => invoke<Title | null>('book_cover', { hash, dataUrl }),
+  /** Файлы книг, которые есть только на других устройствах. */
+  bookElsewhere: () => invoke<RemoteBook[]>('book_elsewhere'),
+  /** Убранный файл снова придёт при обмене. */
+  bookUnskip: (hash: string) => invoke<void>('book_unskip', { hash }),
+  filesSettings: () => invoke<FilesSettings>('files_settings'),
+  filesSet: (what: 'sync' | 'backup', on: boolean) => invoke<FilesSettings>('files_set', { what, on }),
   readings: () => invoke<Reading[]>('reading_list'),
   readingSave: (reading: Reading) => invoke<void>('reading_save', { reading }),
   /** Закладки и цитаты: все или одной записи. */

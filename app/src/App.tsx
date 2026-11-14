@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, message, type Goal, type Imported, type LocalBook, type Reading, type Title } from './api';
+import { api, message, type Goal, type Imported, type LocalBook, type Reading, type RemoteBook, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
 import { takeBook, takeOpened, takeShared } from './share';
@@ -46,7 +46,8 @@ export type Nav = {
 };
 
 /** Файлы книг на этом устройстве и места чтения (с этого и других устройств). */
-export type Library = { files: LocalBook[]; readings: Reading[] };
+/** Файлы книг здесь и на других устройствах, места чтения; `filesSync` — включён ли обмен файлами. */
+export type Library = { files: LocalBook[]; readings: Reading[]; elsewhere: RemoteBook[]; filesSync: boolean };
 
 const TABS: { id: 'home' | 'want' | 'stats' | 'settings'; label: string; icon: string }[] = [
   { id: 'home', label: 'Полка', icon: 'shelf' },
@@ -82,7 +83,7 @@ export default function App() {
   const [scheme, setScheme] = useState(() => stored('polka.scheme', 'shield'));
   const [mode, setMode] = useState<ThemeMode>(() => stored('polka.mode', 'system') as ThemeMode);
   const [goal, setGoal] = useState<Goal>({});
-  const [library, setLibrary] = useState<Library>({ files: [], readings: [] });
+  const [library, setLibrary] = useState<Library>({ files: [], readings: [], elsewhere: [], filesSync: false });
   const libraryRef = useRef(library);
   libraryRef.current = library;
   const wide = useWide();
@@ -105,8 +106,8 @@ export default function App() {
   }, [year]);
 
   const loadLibrary = useCallback(() => {
-    Promise.all([api.bookFiles(), api.readings()])
-      .then(([files, readings]) => setLibrary({ files, readings }))
+    Promise.all([api.bookFiles(), api.readings(), api.bookElsewhere().catch(() => []), api.filesSettings().catch(() => null)])
+      .then(([files, readings, elsewhere, fs]) => setLibrary({ files, readings, elsewhere, filesSync: !!fs?.sync }))
       .catch(() => undefined);
   }, []);
 

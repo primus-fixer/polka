@@ -3100,7 +3100,7 @@ dependencies = [
 
 [[package]]
 name = "polka-app"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -3121,7 +3121,7 @@ dependencies = [
 
 [[package]]
 name = "polka-cloud"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "polka-core",
@@ -3132,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "polka-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -3155,7 +3155,7 @@ dependencies = [
 
 [[package]]
 name = "polka-secure"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "jni",
  "ndk-context",

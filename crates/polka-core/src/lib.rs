@@ -16,6 +16,7 @@ pub mod cloud;
 pub mod date;
 pub mod db;
 pub mod error;
+pub mod files;
 pub mod isbn;
 pub mod lan;
 pub mod model;

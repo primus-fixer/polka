@@ -1,17 +1,19 @@
 //! Читалка: файлы книг на этом устройстве, главы для экрана, место чтения.
 //!
 //! Файлы лежат в папке данных приложения (`books/<sha256>.<ext>`), связь файла с записью полки —
-//! в местных настройках базы (`book.<sha256>`). Место чтения — запись журнала `reading`: уходит на
+//! в местных настройках базы (`book.<sha256>`) и в журнале (`file`): по журналу другие устройства
+//! узнают о файле и, если обмен файлами включён, забирают его (см. `polka_core::files`). Место чтения — запись журнала `reading`: уходит на
 //! другие устройства вместе с полкой, и там книга (тот же файл — по тому же хешу) открывается на том же
 //! месте. Картинки глав EPUB и FB2 отдаёт протокол `book` (`book://localhost/<sha256>/<путь в книге>`,
 //! на Windows и Android — `http://book.localhost/…`). PDF экран получает целиком (`book_data`) и рисует
 //! сам (pdf.js); обложку PDF — первую страницу — тоже рисует экран и присылает (`book_cover`).
 use crate::{err, get_title, put_title, tz_minutes, AppState, Res};
 use polka_core::db::{blob_id, Store};
+use polka_core::files::{self, BookFile, Local, FILE};
 use polka_core::model::{Title, KIND};
 use polka_core::reader::{pdf, percent_decode, shelf, Book, BookFormat, Chapter, Hit, Mark, Meta, Reading, TocItem, MARK, MAX_BOOK, READING};
 use polka_core::{new_id, now_secs, Date};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -20,18 +22,6 @@ use tauri::{AppHandle, Emitter, Manager, State};
 #[derive(Default)]
 pub(crate) struct Books {
     open: Mutex<Option<(String, Arc<Book>)>>,
-}
-
-/// Файл книги на этом устройстве.
-#[derive(Clone, Serialize, Deserialize)]
-struct Local {
-    /// Запись полки.
-    title: String,
-    /// Имя файла, как его выбрали.
-    name: String,
-    format: BookFormat,
-    size: u64,
-    added: i64,
 }
 
 #[derive(Serialize)]
@@ -120,21 +110,18 @@ impl Parsed {
     }
 }
 
-const META: &str = "book.";
+const META: &str = files::LOCAL;
 
 fn is_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    files::is_hash(s)
 }
 
 fn books_dir(state: &AppState) -> PathBuf {
     state.dir.join("books")
 }
 
-const EXTS: [&str; 4] = ["epub", "fb2", "fb2.zip", "pdf"];
-
 fn file_of(state: &AppState, hash: &str) -> Option<PathBuf> {
-    let dir = books_dir(state);
-    EXTS.iter().map(|e| dir.join(format!("{hash}.{e}"))).find(|p| p.is_file())
+    files::path_in(&books_dir(state), hash)
 }
 
 fn is_pdf(path: &Path) -> bool {
@@ -148,7 +135,7 @@ fn local_today(st: &Store) -> Date {
 }
 
 fn local(st: &Store, hash: &str) -> Option<Local> {
-    st.meta(&format!("{META}{hash}")).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
+    files::local(st, hash)
 }
 
 /// Имя файла для показа: без пути и управляющих знаков.
@@ -233,8 +220,15 @@ fn import(app: &AppHandle, data: Vec<u8>, name: &str, today: Option<Date>, prefe
         }
     };
     let format = parsed.format();
-    let entry = Local { title: title.id.clone(), name: clean_name(name), format, size, added: now_secs() };
-    st.set_meta(&format!("{META}{hash}"), &serde_json::to_string(&entry).map_err(err)?).map_err(err)?;
+    let added = local(&st, &hash).map(|l| l.added).unwrap_or_else(now_secs);
+    let entry = Local { title: title.id.clone(), name: clean_name(name), format, size, added };
+    files::set_local(&st, &hash, &entry).map_err(err)?;
+    // В журнал — чтобы о файле узнали другие устройства; открыли снова — он больше не «убран».
+    let record = BookFile { id: hash.clone(), title: entry.title.clone(), name: entry.name.clone(), format, size, added };
+    if st.get::<BookFile>(FILE, &hash).map_err(err)?.as_ref().is_none_or(|r| r.title != record.title) {
+        st.put(FILE, &hash, &record).map_err(err)?;
+    }
+    files::set_skipped(&st, &hash, false).map_err(err)?;
     drop(st);
     if let Parsed::Book { book, .. } = parsed {
         *app.state::<Books>().open.lock().map_err(err)? = Some((hash.clone(), Arc::new(*book)));
@@ -398,7 +392,9 @@ pub fn book_files(state: State<'_, AppState>) -> Res<Vec<LocalBook>> {
     Ok(out)
 }
 
-/// Убрать файл книги с этого устройства (запись на полке и место чтения остаются).
+/// Убрать файл книги с этого устройства (запись на полке и место чтения остаются; на других
+/// устройствах файл тоже остаётся). Обратно сам он не придёт — только если открыть его снова
+/// или нажать «Вернуть» (`book_unskip`).
 #[tauri::command]
 pub fn book_forget(app: AppHandle, hash: String) -> Res<()> {
     if !is_hash(&hash) {
@@ -408,13 +404,89 @@ pub fn book_forget(app: AppHandle, hash: String) -> Res<()> {
     if let Some(path) = file_of(&state, &hash) {
         std::fs::remove_file(path).map_err(|e| format!("файл не удалился: {e}"))?;
     }
-    state.store()?.delete_meta(&format!("{META}{hash}")).map_err(err)?;
+    let _ = std::fs::remove_file(books_dir(&state).join(format!("{hash}.part")));
+    let st = state.store()?;
+    st.delete_meta(&format!("{META}{hash}")).map_err(err)?;
+    files::set_skipped(&st, &hash, true).map_err(err)?;
+    drop(st);
     let books = app.state::<Books>();
     let mut open = books.open.lock().map_err(err)?;
     if open.as_ref().is_some_and(|(h, _)| *h == hash) {
         *open = None;
     }
     Ok(())
+}
+
+/// Файл книги, которого на этом устройстве нет: он есть на другом (запись пришла с журналом).
+#[derive(Serialize)]
+pub struct RemoteBook {
+    hash: String,
+    title: String,
+    name: String,
+    format: BookFormat,
+    size: u64,
+    /// Убран с этого устройства — сам не придёт.
+    skipped: bool,
+}
+
+#[tauri::command]
+pub fn book_elsewhere(state: State<'_, AppState>) -> Res<Vec<RemoteBook>> {
+    let st = state.store()?;
+    Ok(files::elsewhere(&st)
+        .map_err(err)?
+        .into_iter()
+        .map(|f| RemoteBook { skipped: files::skipped(&st, &f.id), hash: f.id, title: f.title, name: f.name, format: f.format, size: f.size })
+        .collect())
+}
+
+/// «Вернуть» убранный файл: при следующем обмене он снова придёт.
+#[tauri::command]
+pub fn book_unskip(state: State<'_, AppState>, hash: String) -> Res<()> {
+    if !is_hash(&hash) {
+        return Err("неверный номер книги".into());
+    }
+    let st = state.store()?;
+    files::set_skipped(&st, &hash, false).map_err(err)
+}
+
+/// Переключатели файлов книг на этом устройстве.
+#[derive(Serialize)]
+pub struct FilesSettings {
+    /// Обмен файлами книг по Wi-Fi и через облако.
+    sync: bool,
+    /// Файлы книг в резервной копии.
+    backup: bool,
+    /// Файлов книг здесь и сколько они занимают.
+    count: usize,
+    bytes: u64,
+}
+
+fn files_view(st: &Store) -> Res<FilesSettings> {
+    let here = files::present(st).map_err(err)?;
+    Ok(FilesSettings { sync: files::sync_on(st), backup: files::backup_on(st), count: here.len(), bytes: here.iter().map(|f| f.size).sum() })
+}
+
+#[tauri::command]
+pub fn files_settings(state: State<'_, AppState>) -> Res<FilesSettings> {
+    let st = state.store()?;
+    files_view(&st)
+}
+
+/// `what`: `sync` или `backup`.
+#[tauri::command]
+pub fn files_set(state: State<'_, AppState>, what: String, on: bool) -> Res<FilesSettings> {
+    let key = match what.as_str() {
+        "sync" => files::SYNC_KEY,
+        "backup" => files::BACKUP_KEY,
+        _ => return Err("неизвестная настройка".into()),
+    };
+    let st = state.store()?;
+    if on {
+        st.set_meta(key, "1").map_err(err)?;
+    } else {
+        st.delete_meta(key).map_err(err)?;
+    }
+    files_view(&st)
 }
 
 #[tauri::command]

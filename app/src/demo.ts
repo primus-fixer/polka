@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, LocalBook, Mark, Reading, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, Candidate, CloudStatus, FilesSettings, Found, Goal, LanView, LocalBook, Mark, Reading, RemoteBook, Season, Status, Title, YearStats } from './api';
 import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoOffset, demoSearch } from './demoBook';
 import demoPdfUrl from './assets/demo-train.pdf?url';
 
@@ -54,6 +54,9 @@ let bookFiles: LocalBook[] = [
   { hash: DEMO_PDF, title: DEMO_PDF_TITLE, name: 'nochnoy-poezd.pdf', format: 'pdf', size: 80_288, added: 1_763_100_000 },
 ];
 const demoView = demoBookView();
+// Файл «Щегла» — на другом устройстве (запись о нём пришла с журналом), обмен файлами выключен.
+let elsewhere: RemoteBook[] = [{ hash: 'e1' + 'a5'.repeat(31), title: 'goldfinch', name: 'Тартт — Щегол.epub', format: 'epub', size: 2_870_000, skipped: false }];
+let filesState: FilesSettings = { sync: false, backup: false, count: 0, bytes: 0 };
 let readings: Reading[] = [
   {
     title: DEMO_TITLE,
@@ -425,6 +428,15 @@ export const demo: Api = {
     if (hash !== DEMO_PDF || !bookFiles.some((b) => b.hash === hash)) throw new Error('Файла книги нет на этом устройстве');
     return (await fetch(demoPdfUrl)).arrayBuffer();
   },
+  bookElsewhere: async () => clone(elsewhere.filter((r) => titles.some((t) => t.id === r.title))),
+  bookUnskip: async (hash) => {
+    elsewhere = elsewhere.map((r) => (r.hash === hash ? { ...r, skipped: false } : r));
+  },
+  filesSettings: async () => clone({ ...filesState, count: bookFiles.length, bytes: bookFiles.reduce((a, b) => a + b.size, 0) }),
+  filesSet: async (what, on) => {
+    filesState = { ...filesState, [what]: on };
+    return clone({ ...filesState, count: bookFiles.length, bytes: bookFiles.reduce((a, b) => a + b.size, 0) });
+  },
   bookCover: async (hash, dataUrl) => {
     const b = bookFiles.find((x) => x.hash === hash);
     const t = b && titles.find((x) => x.id === b.title);
@@ -434,6 +446,8 @@ export const demo: Api = {
     return clone(t);
   },
   bookForget: async (hash) => {
+    const gone = bookFiles.find((b) => b.hash === hash);
+    if (gone) elsewhere = [...elsewhere.filter((r) => r.hash !== hash), { hash, title: gone.title, name: gone.name, format: gone.format, size: gone.size, skipped: true }];
     bookFiles = bookFiles.filter((b) => b.hash !== hash);
   },
   readings: async () => clone(readings),
