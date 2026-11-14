@@ -2,7 +2,7 @@
 // поиск, сноски, вид страницы (размер, шрифт, интервал, поля, тема) и место чтения.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { Nav } from '../App';
-import { api, bookImageSrc, message, type BookHit, type BookNode, type BookView, type Reading, type Title } from '../api';
+import { api, bookImageSrc, isMobileApp, message, type BookHit, type BookNode, type BookView, type Reading, type Title } from '../api';
 import { dayMonth, plural } from '../format';
 import { addReadingFonts, readingFontsReady } from '../reader/fonts';
 import { Pager } from '../reader/pager';
@@ -489,6 +489,31 @@ export default function Reader({ hash, nav, titles, onClose }: { hash: string; n
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [turn, panel, note, bars, close]);
+
+  // Android: «Назад» закрывает сноску, панель или книгу, а не всю «Полку».
+  const onBack = useRef(() => undefined as void);
+  onBack.current = () => {
+    if (note) setNote(null);
+    else if (panel) setPanel(null);
+    else if (bars) setBars(false);
+    else close();
+  };
+  useEffect(() => {
+    if (!isMobileApp) return;
+    let listener: { unregister(): Promise<void> } | null = null;
+    let gone = false;
+    import('@tauri-apps/api/app')
+      .then(({ onBackButtonPress }) => onBackButtonPress(() => onBack.current()))
+      .then((l) => {
+        if (gone) l.unregister().catch(() => undefined);
+        else listener = l;
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+      listener?.unregister().catch(() => undefined);
+    };
+  }, []);
 
   // Сноска во всплывающем окне.
   useEffect(() => {
