@@ -160,7 +160,7 @@ export type CloudEvent = { running: boolean; received: number; step: CloudStep |
 
 // ——— Читалка ———
 
-export type FileFormat = 'epub' | 'fb2';
+export type FileFormat = 'epub' | 'fb2' | 'pdf';
 export type BookMeta = { title: string; authors: string[]; lang?: string; year?: string; publisher?: string; isbn?: string; about?: string; genres: string[] };
 /** Глава: название и объём в знаках (по нему считается процент). */
 export type BookChapter = { title: string; size: number };
@@ -175,7 +175,7 @@ export type Reading = { title: string; book: string; chapter: number; offset: nu
 export type MarkKind = 'bookmark' | 'quote';
 /** Закладка или цитата (запись журнала): место в книге, текст, своя заметка. */
 export type Mark = { id: string; title: string; book: string; kind: MarkKind; chapter: number; offset: number; end: number; text?: string; note?: string; percent: number; created: number };
-export type Imported = { hash: string; title: Title; created: boolean };
+export type Imported = { hash: string; title: Title; created: boolean; format: FileFormat };
 /** Узел главы: текст или [тег, атрибуты, …дети] — страница строит его сама, без innerHTML. */
 export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
 export type BookDrop = { ok?: Imported; error?: string };
@@ -238,6 +238,10 @@ const real = {
   bookSearch: (hash: string, query: string) => invoke<BookHit[]>('book_search', { hash, query }),
   bookFiles: () => invoke<LocalBook[]>('book_files'),
   bookForget: (hash: string) => invoke<void>('book_forget', { hash }),
+  /** PDF целиком — его страницы рисует pdf.js. */
+  bookData: (hash: string) => invoke<ArrayBuffer>('book_data', { hash }),
+  /** Обложка PDF (первая страница картинкой) — если у записи её ещё нет. */
+  bookCover: (hash: string, dataUrl: string) => invoke<Title | null>('book_cover', { hash, dataUrl }),
   readings: () => invoke<Reading[]>('reading_list'),
   readingSave: (reading: Reading) => invoke<void>('reading_save', { reading }),
   /** Закладки и цитаты: все или одной записи. */

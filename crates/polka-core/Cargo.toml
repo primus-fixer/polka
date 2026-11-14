@@ -25,6 +25,8 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 # Читалка: EPUB — архив ZIP с XHTML, FB2 — XML (бывает в windows-1251 и в .fb2.zip).
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 encoding_rs = "0.8.44"
+# PDF: из файла — только название, автор и число страниц; страницы рисует pdf.js в интерфейсе.
+lopdf = { version = "0.47", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

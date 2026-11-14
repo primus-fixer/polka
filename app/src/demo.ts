@@ -1,6 +1,11 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
 import type { Api, BackupStatus, Candidate, CloudStatus, Found, Goal, LanView, LocalBook, Mark, Reading, Season, Status, Title, YearStats } from './api';
 import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoOffset, demoSearch } from './demoBook';
+import demoPdfUrl from './assets/demo-train.pdf?url';
+
+/** Демо-PDF «Ночной поезд»: запись полки и «файл на устройстве». */
+const DEMO_PDF = 'd3e0' + 'f00d'.repeat(15);
+const DEMO_PDF_TITLE = 'demo-pdf';
 import { todayIso } from './format';
 
 export { demoBookImageSrc as demoBookImage } from './demoBook';
@@ -25,6 +30,7 @@ let titles: Title[] = [
   T({ id: 'bb', kind: 'series', title: 'Во все тяжкие', original: 'Breaking Bad', creators: ['Винс Гиллиган'], year: '2008–2013', status: 'doing', started: '2026-10-15', tags: ['с семьёй'], kp: 8.9, imdb: 9.5, ratings_on: '2026-10-15', minutes: 47, genres: ['драма', 'криминал'], about: 'Учитель химии узнаёт о смертельном диагнозе и начинает варить метамфетамин, чтобы обеспечить семью.', seasons: seasons([7, 13, 13, 13, 16], [7, 13, 5], '2026-11-01') }),
   T({ id: 'cot', kind: 'book', title: 'Children of Time', creators: ['Adrian Tchaikovsky'], year: '2015', status: 'doing', started: '2026-11-10', format: 'ebook' }),
   T({ id: DEMO_TITLE, kind: 'book', title: 'Смотритель маяка', creators: ['Полка'], year: '2026', status: 'doing', started: '2026-11-13', format: 'ebook', pages: 6, genres: ['Рассказ'], about: 'Короткий рассказ для проверки читалки: откройте его кнопкой «Читать».' }),
+  T({ id: DEMO_PDF_TITLE, kind: 'book', title: 'Ночной поезд', creators: ['Полка'], year: '2026', status: 'want', added: '2026-11-14', format: 'ebook', pages: 5, genres: ['Рассказ'], about: 'Пример PDF: страницы, оглавление, поиск, закладки и цитаты. Откройте кнопкой «Читать».' }),
   T({ id: 'zul', kind: 'book', title: 'Зулейха открывает глаза', creators: ['Гузель Яхина'], year: '2015', status: 'want', added: '2026-11-11' }),
   T({ id: 'opp', kind: 'film', title: 'Оппенгеймер', creators: ['Кристофер Нолан'], year: '2023', status: 'want', added: '2026-11-10' }),
   T({ id: 'pir', kind: 'book', title: 'Piranesi', creators: ['Susanna Clarke'], year: '2020', status: 'want', added: '2026-11-02' }),
@@ -43,7 +49,10 @@ const backupListeners = new Set<() => void>();
 const backupChanged = () => backupListeners.forEach((l) => l());
 let next = 1;
 // Читалка в демо: одна книга «на устройстве» и место, где её «читали».
-let bookFiles: LocalBook[] = [{ hash: DEMO_BOOK, title: DEMO_TITLE, name: 'smotritel.fb2', format: 'fb2', size: 48_000, added: 1_763_000_000 }];
+let bookFiles: LocalBook[] = [
+  { hash: DEMO_BOOK, title: DEMO_TITLE, name: 'smotritel.fb2', format: 'fb2', size: 48_000, added: 1_763_000_000 },
+  { hash: DEMO_PDF, title: DEMO_PDF_TITLE, name: 'nochnoy-poezd.pdf', format: 'pdf', size: 80_288, added: 1_763_100_000 },
+];
 const demoView = demoBookView();
 let readings: Reading[] = [
   {
@@ -392,8 +401,13 @@ export const demo: Api = {
     throw new Error(NO_FILES);
   },
   bookOpen: async (hash) => {
-    if (hash !== DEMO_BOOK || !bookFiles.length) throw new Error('Файла книги нет на этом устройстве');
+    if (!bookFiles.some((b) => b.hash === hash)) throw new Error('Файла книги нет на этом устройстве');
     await wait(250);
+    if (hash === DEMO_PDF) {
+      const p = find(DEMO_PDF_TITLE);
+      if (p.status === 'want') setStatus(p, 'doing', todayIso());
+      return { hash, format: 'pdf', meta: { title: 'Ночной поезд', authors: ['Полка'], genres: [] }, chapters: [], toc: [], total: 5, title: clone(p) };
+    }
     const t = find(DEMO_TITLE);
     if (t.status === 'want') setStatus(t, 'doing', todayIso());
     return { ...demoBookView(), title: clone(t) };
@@ -407,6 +421,18 @@ export const demo: Api = {
     return demoSearch(query);
   },
   bookFiles: async () => clone(bookFiles.filter((b) => titles.some((t) => t.id === b.title))),
+  bookData: async (hash) => {
+    if (hash !== DEMO_PDF || !bookFiles.some((b) => b.hash === hash)) throw new Error('Файла книги нет на этом устройстве');
+    return (await fetch(demoPdfUrl)).arrayBuffer();
+  },
+  bookCover: async (hash, dataUrl) => {
+    const b = bookFiles.find((x) => x.hash === hash);
+    const t = b && titles.find((x) => x.id === b.title);
+    if (!t || t.cover) return null;
+    t.cover = dataUrl;
+    t.cover_source = 'из файла книги';
+    return clone(t);
+  },
   bookForget: async (hash) => {
     bookFiles = bookFiles.filter((b) => b.hash !== hash);
   },

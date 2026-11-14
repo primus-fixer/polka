@@ -335,7 +335,7 @@ async fn set_cover_url(state: State<'_, AppState>, id: String, url: String, labe
 }
 
 /// Снимок из data URL (`data:image/jpeg;base64,…`): тип проверяется по содержимому.
-fn decode_data_url(data_url: &str) -> Res<(String, Vec<u8>)> {
+pub(crate) fn decode_data_url(data_url: &str) -> Res<(String, Vec<u8>)> {
     let (head, body) = data_url.split_once(',').ok_or("снимок не прочитался")?;
     if !head.starts_with("data:image/") || !head.ends_with(";base64") {
         return Err("подходят только снимки JPEG, PNG и WebP".into());
@@ -582,6 +582,8 @@ pub fn run() {
             reader::book_import_incoming,
             reader::book_open,
             reader::book_chapter,
+            reader::book_data,
+            reader::book_cover,
             reader::book_search,
             reader::book_files,
             reader::book_forget,

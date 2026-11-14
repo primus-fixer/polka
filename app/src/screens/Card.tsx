@@ -44,7 +44,7 @@ function metaLine(t: Title): string {
 }
 
 /** Какие файлы предлагать в окне выбора. На Android формат FB2 системе не знаком — там без отбора. */
-export const BOOK_ACCEPT = isMobileApp ? undefined : '.epub,.fb2,.zip,application/epub+zip,application/x-fictionbook+xml';
+export const BOOK_ACCEPT = isMobileApp ? undefined : '.epub,.fb2,.zip,.pdf,application/epub+zip,application/x-fictionbook+xml,application/pdf';
 
 /** «45 %», «4,5 %». */
 export function readPct(p: number): string {
@@ -213,7 +213,7 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
               </span>
             </div>
           )}
-          {!bookFile && <p className="small muted">EPUB или FB2 — книга откроется в читалке «Полки», место чтения перейдёт на другие устройства.</p>}
+          {!bookFile && <p className="small muted">EPUB, FB2 или PDF — книга откроется в читалке «Полки», место чтения перейдёт на другие устройства.</p>}
           <input
             ref={bookInput}
             type="file"

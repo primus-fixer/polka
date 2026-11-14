@@ -1,15 +1,15 @@
 //! Читалка: файлы книг на этом устройстве, главы для экрана, место чтения.
 //!
 //! Файлы лежат в папке данных приложения (`books/<sha256>.<ext>`), связь файла с записью полки —
-//! в местных настройках базы (`book.<sha256>`): файлы между устройствами не ходят. Место чтения —
-//! запись журнала `reading`: уходит на другие устройства вместе с полкой, и там книга (тот же
-//! файл — по тому же хешу) открывается на том же месте. Картинки глав отдаёт протокол `book`
-//! (`book://localhost/<sha256>/<путь в книге>`, на Windows и Android — `http://book.localhost/…`).
-
+//! в местных настройках базы (`book.<sha256>`). Место чтения — запись журнала `reading`: уходит на
+//! другие устройства вместе с полкой, и там книга (тот же файл — по тому же хешу) открывается на том же
+//! месте. Картинки глав EPUB и FB2 отдаёт протокол `book` (`book://localhost/<sha256>/<путь в книге>`,
+//! на Windows и Android — `http://book.localhost/…`). PDF экран получает целиком (`book_data`) и рисует
+//! сам (pdf.js); обложку PDF — первую страницу — тоже рисует экран и присылает (`book_cover`).
 use crate::{err, get_title, put_title, tz_minutes, AppState, Res};
 use polka_core::db::{blob_id, Store};
 use polka_core::model::{Title, KIND};
-use polka_core::reader::{percent_decode, shelf, Book, BookFormat, Chapter, Hit, Mark, Meta, Reading, TocItem, MARK, MAX_BOOK, READING};
+use polka_core::reader::{pdf, percent_decode, shelf, Book, BookFormat, Chapter, Hit, Mark, Meta, Reading, TocItem, MARK, MAX_BOOK, READING};
 use polka_core::{new_id, now_secs, Date};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -62,6 +62,62 @@ pub struct Imported {
     title: Title,
     /// Запись заведена только что (а не найдена на полке).
     created: bool,
+    format: BookFormat,
+}
+
+/// Что прочиталось из файла книги.
+enum Parsed {
+    Book { book: Box<Book>, zipped: bool },
+    Pdf(pdf::Info),
+}
+
+impl Parsed {
+    fn open(data: &[u8]) -> Res<Parsed> {
+        if pdf::looks_like(data) {
+            return Ok(Parsed::Pdf(pdf::info(data)));
+        }
+        Ok(Parsed::Book { book: Box::new(Book::open(data.to_vec()).map_err(err)?), zipped: data.starts_with(b"PK\x03\x04") })
+    }
+
+    fn format(&self) -> BookFormat {
+        match self {
+            Parsed::Book { book, .. } => book.format,
+            Parsed::Pdf(_) => BookFormat::Pdf,
+        }
+    }
+
+    fn meta(&self) -> &Meta {
+        match self {
+            Parsed::Book { book, .. } => &book.meta,
+            Parsed::Pdf(info) => &info.meta,
+        }
+    }
+
+    /// Знаков в книге — по ним считаются страницы; у PDF страницы известны точно.
+    fn chars(&self) -> usize {
+        match self {
+            Parsed::Book { book, .. } => book.total(),
+            Parsed::Pdf(info) => info.pages as usize * shelf::CHARS_PER_PAGE,
+        }
+    }
+
+    fn ext(&self) -> &'static str {
+        match self {
+            Parsed::Book { book, zipped } => match (book.format, zipped) {
+                (BookFormat::Fb2, false) => "fb2",
+                (BookFormat::Fb2, true) => "fb2.zip",
+                _ => "epub",
+            },
+            Parsed::Pdf(_) => "pdf",
+        }
+    }
+
+    fn cover(&self) -> Option<(&'static str, Vec<u8>)> {
+        match self {
+            Parsed::Book { book, .. } => book.cover(),
+            Parsed::Pdf(_) => None,
+        }
+    }
 }
 
 const META: &str = "book.";
@@ -74,11 +130,15 @@ fn books_dir(state: &AppState) -> PathBuf {
     state.dir.join("books")
 }
 
-const EXTS: [&str; 3] = ["epub", "fb2", "fb2.zip"];
+const EXTS: [&str; 4] = ["epub", "fb2", "fb2.zip", "pdf"];
 
 fn file_of(state: &AppState, hash: &str) -> Option<PathBuf> {
     let dir = books_dir(state);
     EXTS.iter().map(|e| dir.join(format!("{hash}.{e}"))).find(|p| p.is_file())
+}
+
+fn is_pdf(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "pdf")
 }
 
 /// Сегодня по местному времени (смещение присылает экран).
@@ -110,6 +170,9 @@ fn load(app: &AppHandle, hash: &str) -> Res<Arc<Book>> {
     }
     let state = app.state::<AppState>();
     let path = file_of(&state, hash).ok_or("Файла книги нет на этом устройстве")?;
+    if is_pdf(&path) {
+        return Err("PDF показывает читалка PDF".into());
+    }
     let data = std::fs::read(&path).map_err(|e| format!("файл книги не прочитался: {e}"))?;
     let book = Arc::new(Book::open(data).map_err(err)?);
     *books.open.lock().map_err(err)? = Some((hash.to_string(), book.clone()));
@@ -123,24 +186,18 @@ fn import(app: &AppHandle, data: Vec<u8>, name: &str, today: Option<Date>, prefe
         return Err(format!("Книга больше {} МБ — такую не открыть", MAX_BOOK >> 20));
     }
     let hash = blob_id(&data);
-    let zipped = data.starts_with(b"PK\x03\x04");
     let size = data.len() as u64;
-    let book = Book::open(data.clone()).map_err(err)?;
+    let parsed = Parsed::open(&data)?;
     let state = app.state::<AppState>();
     let dir = books_dir(&state);
     std::fs::create_dir_all(&dir).map_err(err)?;
     if file_of(&state, &hash).is_none() {
-        let ext = match (book.format, zipped) {
-            (BookFormat::Epub, _) => "epub",
-            (BookFormat::Fb2, false) => "fb2",
-            (BookFormat::Fb2, true) => "fb2.zip",
-        };
         let tmp = dir.join(format!("{hash}.part"));
         std::fs::write(&tmp, &data).map_err(|e| format!("книга не сохранилась: {e}"))?;
-        std::fs::rename(&tmp, dir.join(format!("{hash}.{ext}"))).map_err(|e| format!("книга не сохранилась: {e}"))?;
+        std::fs::rename(&tmp, dir.join(format!("{hash}.{}", parsed.ext()))).map_err(|e| format!("книга не сохранилась: {e}"))?;
     }
     drop(data);
-    let chars = book.total();
+    let chars = parsed.chars();
     let mut st = state.store()?;
     let today = today.unwrap_or_else(|| local_today(&st));
     let exists = |st: &Store, id: &str| st.get::<Title>(KIND, id).ok().flatten().is_some();
@@ -150,14 +207,14 @@ fn import(app: &AppHandle, data: Vec<u8>, name: &str, today: Option<Date>, prefe
     let read_elsewhere = || st.list::<Reading>(READING).ok().and_then(|list| list.into_iter().find(|r| r.book == hash).map(|r| r.title)).filter(|id| exists(&st, id));
     let found = match chosen.or_else(linked).or_else(read_elsewhere) {
         Some(id) => Some(id),
-        None => shelf::find(&st.list::<Title>(KIND).map_err(err)?, &book.meta),
+        None => shelf::find(&st.list::<Title>(KIND).map_err(err)?, parsed.meta()),
     };
     let (title, created) = match found {
         Some(id) => {
             let mut t = get_title(&st, &id)?;
             let mut changed = shelf::start_reading(&mut t, chars, today);
             if t.cover.is_none() {
-                if let Some((mime, img)) = book.cover() {
+                if let Some((mime, img)) = parsed.cover() {
                     t.cover = Some(st.put_blob(mime, &img).map_err(err)?);
                     t.cover_source = Some("из файла книги".into());
                     changed = true;
@@ -166,20 +223,23 @@ fn import(app: &AppHandle, data: Vec<u8>, name: &str, today: Option<Date>, prefe
             (if changed { put_title(&mut st, t)? } else { t }, false)
         }
         None => {
-            let mut t = shelf::new_title(&book.meta, chars, name, today);
+            let mut t = shelf::new_title(parsed.meta(), chars, name, today);
             t.id = new_id().map_err(err)?;
-            if let Some((mime, img)) = book.cover() {
+            if let Some((mime, img)) = parsed.cover() {
                 t.cover = Some(st.put_blob(mime, &img).map_err(err)?);
                 t.cover_source = Some("из файла книги".into());
             }
             (put_title(&mut st, t)?, true)
         }
     };
-    let entry = Local { title: title.id.clone(), name: clean_name(name), format: book.format, size, added: now_secs() };
+    let format = parsed.format();
+    let entry = Local { title: title.id.clone(), name: clean_name(name), format, size, added: now_secs() };
     st.set_meta(&format!("{META}{hash}"), &serde_json::to_string(&entry).map_err(err)?).map_err(err)?;
     drop(st);
-    *app.state::<Books>().open.lock().map_err(err)? = Some((hash.clone(), Arc::new(book)));
-    Ok(Imported { hash, title, created })
+    if let Parsed::Book { book, .. } = parsed {
+        *app.state::<Books>().open.lock().map_err(err)? = Some((hash.clone(), Arc::new(*book)));
+    }
+    Ok(Imported { hash, title, created, format })
 }
 
 /// Книга, загруженная экраном кусками (как файл копии): выбрали файл на компьютере или телефоне.
@@ -218,7 +278,7 @@ pub async fn book_import_incoming(app: AppHandle, name: String, today: String) -
 pub fn dropped(app: &AppHandle, paths: &[PathBuf]) {
     let is_book = |p: &Path| {
         let n = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-        n.ends_with(".epub") || n.ends_with(".fb2") || n.ends_with(".fb2.zip") || n.ends_with(".zip")
+        n.ends_with(".epub") || n.ends_with(".fb2") || n.ends_with(".fb2.zip") || n.ends_with(".zip") || n.ends_with(".pdf")
     };
     let Some(path) = paths.iter().find(|p| is_book(p)).cloned() else { return };
     let app = app.clone();
@@ -237,22 +297,70 @@ pub fn dropped(app: &AppHandle, paths: &[PathBuf]) {
 }
 
 /// Книга для читалки: описание, главы, оглавление. Открыть книгу — начать читать:
-/// запись «Хочу» становится «В процессе».
+/// запись «Хочу» становится «В процессе». У PDF глав нет: страницы, оглавление и текст — у экрана,
+/// здесь — сведения из файла и число страниц (`total`).
 #[tauri::command]
 pub async fn book_open(app: AppHandle, hash: String, today: String) -> Res<BookView> {
     let today = crate::day(&today)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let book = load(&app, &hash)?;
+        if !is_hash(&hash) {
+            return Err("неверный номер книги".into());
+        }
         let state = app.state::<AppState>();
+        let path = file_of(&state, &hash).ok_or("Файла книги нет на этом устройстве")?;
+        let (format, meta, chapters, toc, total, chars) = if is_pdf(&path) {
+            let data = std::fs::read(&path).map_err(|e| format!("файл книги не прочитался: {e}"))?;
+            let info = pdf::info(&data);
+            let pages = info.pages as usize;
+            (BookFormat::Pdf, info.meta, Vec::new(), Vec::new(), pages, pages * shelf::CHARS_PER_PAGE)
+        } else {
+            let book = load(&app, &hash)?;
+            (book.format, book.meta.clone(), book.chapters.clone(), book.toc.clone(), book.total(), book.total())
+        };
         let mut st = state.store()?;
         let title = match local(&st, &hash).and_then(|l| st.get::<Title>(KIND, &l.title).ok().flatten()) {
-            Some(mut t) => Some(if shelf::start_reading(&mut t, book.total(), today) { put_title(&mut st, t)? } else { t }),
+            Some(mut t) => Some(if shelf::start_reading(&mut t, chars, today) { put_title(&mut st, t)? } else { t }),
             None => None,
         };
-        Ok(BookView { hash, format: book.format, meta: book.meta.clone(), chapters: book.chapters.clone(), toc: book.toc.clone(), total: book.total(), title })
+        Ok(BookView { hash, format, meta, chapters, toc, total, title })
     })
     .await
     .map_err(err)?
+}
+
+/// PDF целиком — для pdf.js на экране.
+#[tauri::command]
+pub async fn book_data(app: AppHandle, hash: String) -> Res<tauri::ipc::Response> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !is_hash(&hash) {
+            return Err("неверный номер книги".into());
+        }
+        let path = file_of(&app.state::<AppState>(), &hash).filter(|p| is_pdf(p)).ok_or("Файла книги нет на этом устройстве")?;
+        let data = std::fs::read(&path).map_err(|e| format!("файл книги не прочитался: {e}"))?;
+        Ok(tauri::ipc::Response::new(data))
+    })
+    .await
+    .map_err(err)?
+}
+
+/// Обложка PDF — первая страница, нарисованная экраном. Ставится, только если обложки у записи
+/// ещё нет: выбранную раньше не заменяем.
+#[tauri::command]
+pub fn book_cover(app: AppHandle, hash: String, data_url: String) -> Res<Option<Title>> {
+    if !is_hash(&hash) {
+        return Err("неверный номер книги".into());
+    }
+    let state = app.state::<AppState>();
+    let mut st = state.store()?;
+    let Some(l) = local(&st, &hash) else { return Ok(None) };
+    let mut t = get_title(&st, &l.title)?;
+    if t.cover.is_some() {
+        return Ok(None);
+    }
+    let (mime, data) = crate::decode_data_url(&data_url)?;
+    t.cover = Some(st.put_blob(&mime, &data).map_err(err)?);
+    t.cover_source = Some("из файла книги".into());
+    Ok(Some(put_title(&mut st, t)?))
 }
 
 /// Глава — JSON дерева для страницы (см. `polka_core::reader::tree`).

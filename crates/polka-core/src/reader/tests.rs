@@ -288,7 +288,8 @@ fn deep_fb2_nesting_stays_in_toc_with_own_anchors() {
 #[test]
 fn not_a_book() {
     let err = |data: Vec<u8>| Book::open(data).err().map(|e| e.to_string()).unwrap_or_default();
-    assert_eq!(err(b"hello".to_vec()), "Это не книга EPUB или FB2");
+    assert_eq!(err(b"hello".to_vec()), "Это не книга EPUB, FB2 или PDF");
+    assert_eq!(err(b"%PDF-1.7\n".to_vec()), "Это PDF: его страницы показывает читалка PDF");
     assert_eq!(err(zip_of(&[("readme.txt", b"x")])), "В архиве нет книги EPUB или FB2");
     assert_eq!(err(zip_of(&[("mimetype", b"application/epub+zip"), ("META-INF/container.xml", b"<container/>")])), "В книге EPUB нет описания (OPF)");
     let no_text = zip_of(&[

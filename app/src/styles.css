@@ -2264,6 +2264,71 @@ p {
   stroke: var(--rd-link);
 }
 
+/* ——— PDF: страницы рисует pdf.js; тема — фильтром поверх нарисованной страницы ——— */
+.pdf-reader {
+  --rd-side: 14px;
+}
+
+.pdf-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* pdf.js требует, чтобы прокручиваемый блок был позиционирован абсолютно. */
+.pdf-box {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  background: color-mix(in srgb, var(--rd-ink) 7%, var(--rd-bg));
+}
+
+.pdf-reader .pdfViewer {
+  padding: 10px 0 24px;
+}
+
+.pdf-reader .pdfViewer.removePageBorders .page {
+  margin: 0 auto 12px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.16);
+}
+
+.pdf-reader.theme-sepia .pdfViewer .page canvas {
+  filter: sepia(0.32) saturate(1.15) brightness(0.97);
+}
+
+.pdf-reader.theme-dark .pdfViewer {
+  --page-bg-color: #1f1f1e;
+}
+
+.pdf-reader.theme-dark .pdfViewer .page canvas {
+  filter: invert(0.88) hue-rotate(180deg);
+}
+
+/* Текст PDF прозрачен поверх нарисованной страницы: подсветка должна просвечивать. */
+.pdf-reader ::highlight(polka-hit) {
+  background-color: color-mix(in srgb, var(--rd-hit) 55%, transparent);
+}
+
+.pdf-reader ::highlight(polka-quote) {
+  background-color: color-mix(in srgb, var(--rd-hit) 35%, transparent);
+}
+
+.pdf-reader .textLayer ::selection {
+  background: color-mix(in srgb, var(--rd-link) 35%, transparent);
+}
+
+.pdf-reader .rd-toc button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pdf-goto input {
+  max-width: 11em;
+}
+
 ::highlight(polka-quote) {
   background-color: color-mix(in srgb, var(--rd-hit) 50%, transparent);
   color: inherit;

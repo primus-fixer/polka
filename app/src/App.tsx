@@ -15,6 +15,7 @@ import Want from './screens/Want';
 
 // Читалка — отдельным куском: её код и шрифт грузятся, только когда открывают книгу.
 const Reader = lazy(() => import('./screens/Reader'));
+const PdfReader = lazy(() => import('./screens/PdfReader'));
 /** Открыть книгу сразу на месте (цитата из карточки): глава, знак, длина подсветки. */
 export type ReaderAt = { chapter: number; offset: number; len: number };
 
@@ -25,7 +26,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'add'; replace?: string; shared?: string }
   | { name: 'card'; id: string }
-  | { name: 'reader'; hash: string; at?: ReaderAt };
+  | { name: 'reader'; hash: string; at?: ReaderAt; pdf?: boolean };
 
 export type Filter = 'all' | 'book' | 'screen';
 
@@ -82,6 +83,8 @@ export default function App() {
   const [mode, setMode] = useState<ThemeMode>(() => stored('polka.mode', 'system') as ThemeMode);
   const [goal, setGoal] = useState<Goal>({});
   const [library, setLibrary] = useState<Library>({ files: [], readings: [] });
+  const libraryRef = useRef(library);
+  libraryRef.current = library;
   const wide = useWide();
   const year = yearOf(todayIso());
 
@@ -134,7 +137,7 @@ export default function App() {
       loadLibrary();
       setToast(r.created ? `«${r.title.title}» — теперь на полке, в «Читаю»` : null);
       setHistory((h) => [...h.slice(-20), routeRef.current]);
-      setRoute({ name: 'reader', hash: r.hash });
+      setRoute({ name: 'reader', hash: r.hash, pdf: r.format === 'pdf' });
     },
     [loadLibrary],
   );
@@ -225,7 +228,7 @@ export default function App() {
       toast: setToast,
       read: (hash, at) => {
         setHistory([...history.slice(-20), route]);
-        setRoute({ name: 'reader', hash, at });
+        setRoute({ name: 'reader', hash, at, pdf: libraryRef.current.files.some((f) => f.hash === hash && f.format === 'pdf') });
       },
       importBook: (file, title) => {
         setToast(`Открываю «${file.name}»…`);
@@ -245,10 +248,11 @@ export default function App() {
   };
 
   if (route.name === 'reader') {
+    const BookReader = route.pdf ? PdfReader : Reader;
     return (
       <>
         <Suspense fallback={<div className="rd-wait">Открываю книгу…</div>}>
-          <Reader
+          <BookReader
             key={`${route.hash}-${route.at?.chapter ?? ''}-${route.at?.offset ?? ''}`}
             hash={route.hash}
             at={route.at}

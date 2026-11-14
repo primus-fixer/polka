@@ -73,7 +73,7 @@ if ! grep -q 'android.intent.action.SEND' "$MANIFEST"; then
   mv "$MANIFEST.new" "$MANIFEST"
 fi
 
-# Книги EPUB и FB2: «Открыть с помощью → Полка» из файлового менеджера, загрузок браузера, Telegram,
+# Книги EPUB, FB2 и PDF: «Открыть с помощью → Полка» из файлового менеджера, загрузок браузера, Telegram,
 # и «Поделиться» файлом. FB2 Android не знает — такие файлы часто приходят как octet-stream или zip.
 if ! grep -q 'application/epub+zip' "$MANIFEST"; then
   awk '
@@ -82,6 +82,7 @@ if ! grep -q 'application/epub+zip' "$MANIFEST"; then
       print "                <data android:mimeType=\"application/x-fictionbook+xml\" />"
       print "                <data android:mimeType=\"application/x-fictionbook\" />"
       print "                <data android:mimeType=\"application/x-fb2\" />"
+      print "                <data android:mimeType=\"application/pdf\" />"
       print "                <data android:mimeType=\"application/zip\" />"
       print "                <data android:mimeType=\"application/octet-stream\" />"
     }
