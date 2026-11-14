@@ -17,11 +17,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
+mod backup;
+mod lan;
+
+/// Версия «Полки» — пишется в резервные копии.
+pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 struct AppState {
-    store: Mutex<Store>,
+    /// База — общая с потоками обмена по Wi-Fi.
+    store: Arc<Mutex<Store>>,
     dir: PathBuf,
     keys: Mutex<Keys>,
     net: Arc<Net>,
+    /// Номер этого устройства в журнале.
+    id: String,
+    /// Как называть это устройство в копиях и при связи: имя компьютера или «Телефон».
+    name: String,
+    /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
+    lan: lan::Lan,
 }
 
 impl AppState {
@@ -45,6 +58,48 @@ fn day(s: &str) -> Res<Date> {
 }
 
 // ——— Устройство, ключ базы и ключи каталогов ———
+
+/// Имя устройства для копий: имя компьютера в системе, на телефоне — «Телефон».
+fn device_name() -> String {
+    if cfg!(mobile) {
+        return "Телефон".into();
+    }
+    let raw = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())
+        .unwrap_or_default();
+    let name: String = raw.trim().chars().filter(|c| !c.is_control()).take(40).collect();
+    if name.is_empty() {
+        "Компьютер".into()
+    } else {
+        name
+    }
+}
+
+/// Смещение местного времени от UTC в минутах — его присылает экран (для имён копий).
+pub(crate) fn tz_minutes(st: &Store) -> i64 {
+    st.meta("tz").ok().flatten().and_then(|v| v.parse::<i64>().ok()).filter(|m| m.abs() <= 14 * 60).unwrap_or(0)
+}
+
+#[tauri::command]
+fn set_tz(state: State<'_, AppState>, minutes: i32) -> Res<()> {
+    if minutes.abs() > 14 * 60 {
+        return Err("неверный часовой пояс".into());
+    }
+    state.store()?.set_meta("tz", &minutes.to_string()).map_err(err)
+}
+
+/// Общие настройки — записи вида `setting`: они попадают в журнал и доходят до других устройств.
+const SETTING_KIND: &str = "setting";
+
+pub(crate) fn setting(st: &Store, key: &str) -> Option<String> {
+    st.get::<String>(SETTING_KIND, key).ok().flatten()
+}
+
+pub(crate) fn put_setting(st: &mut Store, key: &str, value: &str) -> Res<()> {
+    st.put(SETTING_KIND, key, &value.to_string()).map_err(err)
+}
 
 #[derive(Serialize, Deserialize)]
 struct Identity {
@@ -374,6 +429,9 @@ pub fn run() {
     });
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    // Окно выбора папки для резервных копий.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
@@ -383,7 +441,10 @@ pub fn run() {
             let key = load_key(&dir, &db)?;
             let store = Store::open(&db, &key, &me.id).map_err(err)?;
             let keys = load_keys(&dir);
-            app.manage(AppState { store: Mutex::new(store), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()) });
+            backup::clean_uploads(&dir);
+            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
+            backup::start_auto(app.handle().clone());
+            lan::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -403,6 +464,25 @@ pub fn run() {
             settings,
             set_goal,
             set_key,
+            set_tz,
+            backup::backup_status,
+            backup::backup_password,
+            backup::backup_every,
+            backup::backup_dir,
+            backup::backup_pick_dir,
+            backup::backup_now,
+            backup::backup_upload,
+            backup::backup_inspect,
+            backup::backup_restore,
+            backup::backup_discard,
+            lan::lan_status,
+            lan::lan_scan,
+            lan::lan_code_start,
+            lan::lan_code_stop,
+            lan::lan_pair,
+            lan::lan_pair_qr,
+            lan::lan_sync_now,
+            lan::lan_unpair,
         ])
         .run(tauri::generate_context!())
         .expect("«Полка» не запустилась");

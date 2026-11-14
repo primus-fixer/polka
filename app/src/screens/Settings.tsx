@@ -3,6 +3,8 @@ import type { Nav } from '../App';
 import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
+import BackupSection from './Backup';
+import WifiSection from './Wifi';
 
 type Props = {
   scheme: string;
@@ -12,6 +14,8 @@ type Props = {
   goal: Goal;
   year: number;
   onGoal: () => void;
+  /** Пришли записи с другого устройства — перечитать полку. */
+  onSynced: () => void;
   nav: Nav;
 };
 
@@ -22,7 +26,7 @@ const METHOD: Record<string, string> = {
   demo: 'демо в браузере: данные не сохраняются',
 };
 
-export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, nav }: Props) {
+export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav }: Props) {
   const [info, setInfo] = useState<S | null>(null);
   const [books, setBooks] = useState(goal.books ? String(goal.books) : '');
   const [screen, setScreen] = useState(goal.screen ? String(goal.screen) : '');
@@ -161,15 +165,19 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
       </section>
 
+      <WifiSection onSynced={onSynced} />
+
+      <BackupSection nav={nav} />
+
       <section className="stack-s">
         <h2 className="sec">Данные</h2>
         <p className="small muted">
-          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. Обмен по Wi-Fi и через Яндекс Диск и резервные копии — в следующем этапе.
+          Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. Обмен через Яндекс Диск — в следующей версии.
         </p>
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.1.0</p>
+      <p className="small muted3">Полка 0.3.0</p>
     </div>
   );
 }

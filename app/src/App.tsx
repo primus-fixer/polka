@@ -26,6 +26,8 @@ export type Nav = {
   /** Запись изменилась (или добавилась) — заменить в списке. */
   update: (t: Title) => void;
   removed: (id: string) => void;
+  /** Вся полка заново — после восстановления из копии. */
+  replaceAll: (list: Title[]) => void;
   toast: (text: string) => void;
 };
 
@@ -90,7 +92,14 @@ export default function App() {
     api.settings(year).then((s) => setGoal(s.goal)).catch(() => undefined);
   }, [year]);
 
+  const reload = useCallback(() => {
+    api.titles().then(setTitles).catch(() => undefined);
+    loadGoal();
+  }, [loadGoal]);
+
   useEffect(() => {
+    // Смещение местного времени — для имён резервных копий.
+    api.setTz(-new Date().getTimezoneOffset()).catch(() => undefined);
     api
       .titles()
       .then(setTitles)
@@ -98,6 +107,14 @@ export default function App() {
       .finally(() => setLoaded(true));
     loadGoal();
   }, [loadGoal]);
+
+  // Обмен по Wi-Fi идёт в фоне: пришло новое — перечитать полку.
+  useEffect(() => {
+    const un = api.onLan((e) => (e.received > 0 || e.paired) && reload()).catch(() => () => undefined);
+    return () => {
+      un.then((f) => f());
+    };
+  }, [reload]);
 
   useEffect(() => {
     if (!toast) return;
@@ -118,6 +135,7 @@ export default function App() {
       },
       update: (t) => setTitles((ts) => (ts.some((x) => x.id === t.id) ? ts.map((x) => (x.id === t.id ? t : x)) : [...ts, t])),
       removed: (id) => setTitles((ts) => ts.filter((x) => x.id !== id)),
+      replaceAll: setTitles,
       toast: setToast,
     }),
     [route, history],
@@ -140,7 +158,7 @@ export default function App() {
   else if (route.name === 'want') body = <Want titles={titles} nav={nav} filter={filter} setFilter={setFilter} />;
   else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} />;
   else if (route.name === 'settings')
-    body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} nav={nav} />;
+    body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} onSynced={reload} nav={nav} />;
   else if (route.name === 'add') body = <Add titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} />;
   else {
     const t = titles.find((x) => x.id === route.id);

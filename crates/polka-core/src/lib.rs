@@ -4,15 +4,21 @@
 //! - `db` — зашифрованная база (SQLCipher) с журналом событий, как в «Кармане»;
 //! - `catalog` — поиск в Open Library, Google Books, FantLab и ПоискКино, добавление по ссылке,
 //!   варианты обложек и скачивание выбранной;
-//! - `stats` — итоги за год: цель, страницы и часы, жанры, авторы, оценки.
+//! - `stats` — итоги за год: цель, страницы и часы, жанры, авторы, оценки;
+//! - `backup` — резервная копия: журнал и обложки в одном файле, зашифрованном паролем копии;
+//! - `sync`, `pairing`, `lan` — обмен по Wi-Fi: связь по коду (SPAKE2), поиск в сети, обмен записями и обложками.
 
+pub mod backup;
 pub mod catalog;
 pub mod date;
 pub mod db;
 pub mod error;
 pub mod isbn;
+pub mod lan;
 pub mod model;
+pub mod pairing;
 pub mod stats;
+pub mod sync;
 
 pub use date::Date;
 pub use error::{Error, Result};
