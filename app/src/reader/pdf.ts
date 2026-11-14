@@ -12,8 +12,9 @@ export function loadPdf(): Promise<Pdfjs> {
   loading ??= (async () => {
     // Сначала библиотека: просмотрщик берёт её из globalThis.pdfjsLib.
     const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const { default: workerUrl } = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
-    lib.GlobalWorkerOptions.workerSrc = workerUrl;
+    // Фоновый разбор PDF — свой поток (Web Worker), один на всё время работы «Полки».
+    const { default: PdfWorker } = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker');
+    lib.GlobalWorkerOptions.workerPort = new PdfWorker();
     const viewer = await import('pdfjs-dist/legacy/web/pdf_viewer.mjs');
     await import('pdfjs-dist/legacy/web/pdf_viewer.css');
     return { lib, viewer };

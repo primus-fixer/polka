@@ -53,4 +53,6 @@ export default defineConfig({
   build: {
     target: 'es2022',
   },
+  // Поток pdf.js — модулем (как сам pdf.js).
+  worker: { format: 'es' },
 });
