@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Nav } from '../App';
 import { api, isMobileApp, message, photoToDataUrl, scanIsbn, type BookFormat, type Candidate, type CoverOption, type Found, type Kind, type Status, type Title } from '../api';
 import { plural, todayIso } from '../format';
+import { parseShared } from '../share';
 import { Cover, Header, Icon, RatingPicker, Seg, TagPicker, palette } from '../ui';
 import { FORMATS, STATUS } from './Card';
 
@@ -15,7 +16,7 @@ export function onShelf(titles: Title[], c: Pick<Candidate, 'title' | 'kind'>): 
   return titles.find((t) => norm(t.title) === key && (t.kind === 'book') === (c.kind === 'book'));
 }
 
-export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Nav; replace?: Title }) {
+export default function Add({ titles, nav, replace, shared }: { titles: Title[]; nav: Nav; replace?: Title; shared?: string }) {
   const [kind, setKind] = useState<'book' | 'film'>(replace && replace.kind !== 'book' ? 'film' : 'book');
   const [query, setQuery] = useState(replace ? [replace.title, replace.kind === 'book' ? replace.creators[0] : ''].filter(Boolean).join(' ') : '');
   const [found, setFound] = useState<Found | null>(null);
@@ -38,9 +39,22 @@ export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Na
     }
   };
 
-  // Смена обложки: сразу ищем ту же книгу или фильм.
+  // Смена обложки: сразу ищем ту же книгу или фильм. «Поделиться»: сразу берём ссылку или ищем по названию.
   useEffect(() => {
     if (replace) search();
+    if (shared) {
+      const s = parseShared(shared);
+      const k = s.kind ?? 'book';
+      setKind(k);
+      if (s.url) {
+        setMode('link');
+        setUrl(s.url);
+        byLink(s.url, s.title, k);
+      } else if (s.title) {
+        setQuery(s.title);
+        search(s.title, k);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,14 +80,22 @@ export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Na
     }
   };
 
-  const byLink = async () => {
+  /** По ссылке; не открылась, а название известно (из «Поделиться») — ищем по нему в каталогах. */
+  const byLink = async (u = url, fallback = '', k = kind) => {
     setBusy(true);
     try {
-      setPick(await api.fromLink(url));
-    } catch (e) {
-      nav.toast(message(e));
-    } finally {
+      setPick(await api.fromLink(u));
       setBusy(false);
+    } catch (e) {
+      setBusy(false);
+      if (fallback) {
+        nav.toast(`${message(e)}. Ищу по названию «${fallback}»`);
+        setMode('search');
+        setQuery(fallback);
+        await search(fallback, k);
+      } else {
+        nav.toast(message(e));
+      }
     }
   };
 
@@ -90,6 +112,8 @@ export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Na
         titles={titles}
         nav={nav}
         replace={replace}
+        // Из «Поделиться» обычно добавляют на потом.
+        status0={shared ? 'want' : 'done'}
         onBack={() => {
           setPick(null);
           setManual(false);
@@ -143,7 +167,7 @@ export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Na
           className="search"
           onSubmit={(e) => {
             e.preventDefault();
-            byLink();
+            byLink(url);
           }}
         >
           <Icon name="link" style={{ color: 'var(--ink2)', flex: 'none' }} />
@@ -204,15 +228,15 @@ export default function Add({ titles, nav, replace }: { titles: Title[]; nav: Na
   );
 }
 
-type PickProps = { candidate: Candidate; manual: boolean; titles: Title[]; nav: Nav; replace?: Title; onBack: () => void };
+type PickProps = { candidate: Candidate; manual: boolean; titles: Title[]; nav: Nav; replace?: Title; status0?: Status; onBack: () => void };
 
-function Pick({ candidate, manual, titles, nav, replace, onBack }: PickProps) {
+function Pick({ candidate, manual, titles, nav, replace, status0 = 'done', onBack }: PickProps) {
   const [c, setC] = useState(candidate);
   const [broken, setBroken] = useState<string[]>([]);
   const options = c.covers.filter((o) => !broken.includes(o.url));
   const [sel, setSel] = useState<string | 'photo' | null>(candidate.covers[0]?.url ?? null);
   const [photo, setPhoto] = useState<string | null>(null);
-  const [status, setStatus] = useState<Status>('done');
+  const [status, setStatus] = useState<Status>(status0);
   const [date, setDate] = useState(todayIso());
   const [rating, setRating] = useState<number | null>(null);
   const [format, setFormat] = useState<BookFormat>('paper');

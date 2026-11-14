@@ -26,6 +26,8 @@ let titles: Title[] = [
   T({ id: 'pir', kind: 'book', title: 'Piranesi', creators: ['Susanna Clarke'], year: '2020', status: 'want', added: '2026-11-02' }),
   T({ id: 'chern', kind: 'series', title: 'Чернобыль', creators: ['Юхан Ренк'], year: '2019', status: 'want', added: '2026-10-28', seasons: seasons([5], [], '') }),
 ];
+// Демо с пустой полкой — как при первом запуске: адрес с «?empty».
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('empty')) titles = [];
 let goal: Goal = { books: 24, screen: null };
 let lan: LanView = { name: 'Демо', hosts: ['192.168.1.34'], code: null, note: null, peers: [], nearby: [] };
 const QR_DEMO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1z" fill="none" stroke="#15232D" stroke-width="2"/><path d="M11 3h2v2h-2zM14 6h3v2h-3zM10 10h4v3h-4zM16 12h3v4h-3zM12 17h2v5h-2zM20 18h4v2h-4zM17 23h3v3h-3zM23 22h3v4h-3z" fill="#15232D"/></svg>';
@@ -302,6 +304,14 @@ export const demo: Api = {
   },
   lanUnpair: async () => clone(lan),
   onLan: async () => () => undefined,
+  coverBlob: async (id) => (await fetch(id)).blob(),
+  saveImage: async (name, data) => {
+    const a = document.createElement('a');
+    a.href = `data:image/png;base64,${data}`;
+    a.download = name;
+    a.click();
+    return name;
+  },
   // Облако в демо — понарошку: вход и обмен только изображаются, файлы никуда не уходят.
   cloudStatus: async () => clone({ ...cloud, backup_password: backup.password, notice: null }),
   cloudDavLogin: async (kind, url, user, password) => {

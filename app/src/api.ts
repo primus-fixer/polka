@@ -221,6 +221,10 @@ const real = {
     const { listen } = await import('@tauri-apps/api/event');
     return listen<LanEvent>('lan', (ev) => listener(ev.payload));
   },
+  /** Обложка из базы — для картинки года (холст рисует её без интернета). */
+  coverBlob: async (id: string) => new Blob([await invoke<ArrayBuffer>('cover_bytes', { id })]),
+  /** Компьютер: сохранить картинку через окно «Сохранить как»; null — передумали. */
+  saveImage: (name: string, data: string) => invoke<string | null>('save_image', { name, data }),
   cloudStatus: () => invoke<CloudStatus>('cloud_status'),
   /** Вход по логину и паролю: Яндекс Диск (пароль приложения) или свой сервер WebDAV. */
   cloudDavLogin: (kind: CloudProvider, url: string | null, user: string, password: string) => invoke<CloudStatus>('cloud_dav_login', { kind, url, user, password }),
