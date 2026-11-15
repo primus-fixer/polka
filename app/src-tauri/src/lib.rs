@@ -556,11 +556,14 @@ pub fn run() {
             backup::clean_uploads(&dir);
             // С PIN-кодом «Полка» открывается заблокированной.
             let guard = Guard::new(guard::has_pin(&store));
-            // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1.
             #[cfg(desktop)]
-            claude::start(app.handle().clone(), dir.clone());
+            let claude_dir = dir.clone();
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard: Mutex::new(guard) });
             app.manage(reader::Books::default());
+            // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1 —
+            // после того как база открыта, чтобы первый же запрос нашёл её.
+            #[cfg(desktop)]
+            claude::start(app.handle().clone(), claude_dir);
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
             cloud::start(app.handle().clone());

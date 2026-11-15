@@ -147,7 +147,7 @@ fn look_up(state: &AppState, args: &Value) -> Option<Lookup> {
 /// Инструмент «Полки» для Claude: чтение — когда подключение включено, запись — только если она
 /// разрешена; каждое записанное действие можно отменить кнопкой «Вернуть».
 fn execute(app: &AppHandle, tool: &str, args: &Value) -> Result<Value, String> {
-    let state = app.state::<AppState>();
+    let state = app.try_state::<AppState>().ok_or("«Полка» ещё открывается — повторите запрос через несколько секунд")?;
     let info = tools::find(tool).ok_or_else(|| format!("нет инструмента «{tool}»"))?;
     let today = {
         let st = match state.store() {
