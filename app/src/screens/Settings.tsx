@@ -5,6 +5,7 @@ import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
 import BackupSection from './Backup';
 import BookFilesSection from './BookFiles';
+import ClaudeSection from './Claude';
 import CloudSection from './Cloud';
 import SecuritySection, { type Security } from './Security';
 import WifiSection from './Wifi';
@@ -169,6 +170,8 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         </form>
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
       </section>
+
+      <ClaudeSection nav={nav} onChange={onSynced} />
 
       <WifiSection onSynced={onSynced} />
 

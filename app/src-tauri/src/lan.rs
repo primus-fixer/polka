@@ -658,6 +658,11 @@ pub fn lan_unpair(app: AppHandle, state: State<AppState>, id: String) -> Res<Lan
     view(&state)
 }
 
+/// «Полка» заблокировалась: код связи больше не действует — по прежнему коду или QR-коду не подключиться.
+pub fn on_lock(state: &AppState) {
+    lock(&state.lan.code).take();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,9 +699,4 @@ mod tests {
         assert!(version_hint("99.0.0").contains("обновите это устройство"));
         assert!(qr_svg("polka://pair?v=1&d=a").unwrap().starts_with("<?xml"));
     }
-}
-
-/// «Полка» заблокировалась: код связи больше не действует — по прежнему коду или QR-коду не подключиться.
-pub fn on_lock(state: &AppState) {
-    lock(&state.lan.code).take();
 }

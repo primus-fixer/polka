@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, LOCKED, message, type Goal, type Imported, type LocalBook, type LockStatus, type Reading, type RemoteBook, type Title } from './api';
+import { api, LOCKED, message, type ClaudeEvent, type Goal, type Imported, type LocalBook, type LockStatus, type Reading, type RemoteBook, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
 import { takeBook, takeOpened, takeShared } from './share';
@@ -74,6 +74,8 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [history, setHistory] = useState<Route[]>([]);
   const [toast, showToast] = useState<string | null>(null);
+  // Claude записал что-то через коннектор: сообщение с кнопкой «Вернуть».
+  const [claudeNote, setClaudeNote] = useState<ClaudeEvent | null>(null);
   // Вход по PIN-коду: состояние, экран входа поверх всего, экраны «задать/сменить PIN».
   const [lock, setLock] = useState<LockStatus | null>(null);
   const [locked, setLocked] = useState(false);
@@ -222,6 +224,25 @@ export default function App() {
     };
   }, [reload]);
 
+  // Коннектор для приложения Claude: Claude что-то записал — перечитать полку и показать, что именно.
+  useEffect(() => {
+    const off = api
+      .onClaude((e) => {
+        reload();
+        setClaudeNote(e);
+      })
+      .catch(() => () => undefined);
+    return () => {
+      off.then((f) => f());
+    };
+  }, [reload]);
+
+  useEffect(() => {
+    if (!claudeNote) return;
+    const id = window.setTimeout(() => setClaudeNote(null), 12000);
+    return () => window.clearTimeout(id);
+  }, [claudeNote]);
+
   // «Поделиться» → «Полка» на Android: текст со ссылкой открывает добавление.
   useEffect(() => {
     if (!loaded) return;
@@ -367,6 +388,29 @@ export default function App() {
     </>
   );
 
+  const undoClaude = (id: number) => {
+    setClaudeNote(null);
+    api
+      .claudeUndo(id)
+      .then(() => {
+        reload();
+        setToast('Отменено');
+      })
+      .catch((e) => setToast(message(e)));
+  };
+  const toastView = claudeNote ? (
+    <div className="toast with-action" role="status">
+      <span>{claudeNote.text}</span>
+      <button type="button" className="toast-btn" onClick={() => undoClaude(claudeNote.id)}>
+        Вернуть
+      </button>
+    </div>
+  ) : toast ? (
+    <div className="toast" role="status" onClick={() => showToast(null)}>
+      {toast}
+    </div>
+  ) : null;
+
   if (route.name === 'reader') {
     const BookReader = route.pdf ? PdfReader : Reader;
     return (
@@ -386,11 +430,7 @@ export default function App() {
             }}
           />
         </Suspense>
-        {toast && (
-          <div className="toast" role="status" onClick={() => showToast(null)}>
-            {toast}
-          </div>
-        )}
+        {toastView}
       </>
     );
   }
@@ -450,11 +490,7 @@ export default function App() {
           ))}
         </nav>
       )}
-      {toast && (
-        <div className="toast" role="status" onClick={() => showToast(null)}>
-          {toast}
-        </div>
-      )}
+      {toastView}
       {overlays}
     </div>
   );

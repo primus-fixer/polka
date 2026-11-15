@@ -210,6 +210,26 @@ export type LockStatus = {
   error: string | null;
 };
 
+// ——— Коннектор для приложения Claude (компьютер) ———
+
+/** Действие Claude, которое можно отменить. */
+export type ClaudeAction = { id: number; at: number; tool: string; text: string; undone: boolean };
+export type ClaudeStatus = {
+  /** Коннектор есть только на компьютере. */
+  desktop: boolean;
+  on: boolean;
+  write: boolean;
+  /** Путь к polka.exe и папка данных — для ручной настройки. */
+  command: string;
+  dir: string;
+  /** Готовый текст для claude_desktop_config.json. */
+  config: string;
+  /** Новые сверху. */
+  actions: ClaudeAction[];
+};
+/** Claude что-то записал: `text` — «Claude: Добавлено: …». */
+export type ClaudeEvent = { id: number; text: string };
+
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
 
@@ -233,6 +253,16 @@ const real = {
   onLocked: async (listener: () => void): Promise<() => void> => {
     const { listen } = await import('@tauri-apps/api/event');
     return listen('locked', listener);
+  },
+  claudeStatus: () => invoke<ClaudeStatus>('claude_status'),
+  claudeSet: (on: boolean, write: boolean) => invoke<ClaudeStatus>('claude_set', { on, write }),
+  /** Отменить действие Claude («Вернуть»). */
+  claudeUndo: (id: number) => invoke<ClaudeStatus>('claude_undo', { id }),
+  /** Расширение «Полка для Claude.mcpb» — в «Загрузки»; `open` — сразу открыть: Claude предложит установить. */
+  claudeBundle: (open: boolean) => invoke<string>('claude_bundle', { open }),
+  onClaude: async (listener: (e: ClaudeEvent) => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<ClaudeEvent>('claude', (ev) => listener(ev.payload));
   },
   titles: () => invoke<Title[]>('titles'),
   save: (title: Title) => invoke<Title>('save_title', { title, today: todayIso() }),

@@ -1,5 +1,5 @@
 // Демо-данные для браузера: `npm run dev` и превью без приложения. Логика повторяет ядро в упрощённом виде.
-import type { Api, BackupStatus, LockStatus, Candidate, CloudStatus, FilesSettings, Found, Goal, LanView, LocalBook, Mark, Reading, RemoteBook, Season, Status, Title, YearStats } from './api';
+import type { Api, BackupStatus, ClaudeStatus, LockStatus, Candidate, CloudStatus, FilesSettings, Found, Goal, LanView, LocalBook, Mark, Reading, RemoteBook, Season, Status, Title, YearStats } from './api';
 import { DEMO_BOOK, DEMO_TITLE, demoBookView, demoChapter, demoOffset, demoSearch } from './demoBook';
 import demoPdfUrl from './assets/demo-train.pdf?url';
 
@@ -216,7 +216,46 @@ function stats(year: number): YearStats {
   return s;
 }
 
+// Коннектор для Claude в демо: переключатели в памяти и пример действий Claude.
+const hourAgo = Math.floor(Date.now() / 1000) - 3600;
+const claude: ClaudeStatus = {
+  desktop: true,
+  on: true,
+  write: true,
+  command: 'C:\\Users\\Вы\\AppData\\Local\\Polka\\polka.exe',
+  dir: 'C:\\Users\\Вы\\AppData\\Roaming\\io.github.primusfixer.polka',
+  config: '',
+  actions: [
+    { id: 2, at: hourAgo + 600, tool: 'update_title', text: 'Изменено: «Пикник на обочине» (Аркадий Стругацкий, Борис Стругацкий) — оценка 9 из 10', undone: false },
+    { id: 1, at: hourAgo, tool: 'add_title', text: 'Добавлено: «Зулейха открывает глаза» (Гузель Яхина) — «Хочу»', undone: false },
+  ],
+};
+claude.config = JSON.stringify({ mcpServers: { polka: { command: claude.command, args: ['--mcp'], env: { POLKA_DIR: claude.dir } } } }, null, 2);
+
 export const demo: Api = {
+  claudeStatus: async () => clone(claude),
+  claudeSet: async (on, write) => {
+    claude.on = on;
+    claude.write = on && write;
+    return clone(claude);
+  },
+  claudeUndo: async (id) => {
+    const a = claude.actions.find((x) => x.id === id);
+    if (!a) throw new Error('Это действие уже не найти — поправьте вручную');
+    if (a.undone) throw new Error('Уже отменено');
+    a.undone = true;
+    return clone(claude);
+  },
+  claudeBundle: async () => {
+    await wait(300);
+    return 'C:\\Users\\Вы\\Downloads\\Полка для Claude.mcpb';
+  },
+  // Как выглядит сообщение о действии Claude: адрес демо с «?claude».
+  onClaude: async (listener) => {
+    if (typeof location === 'undefined' || !new URLSearchParams(location.search).has('claude')) return () => undefined;
+    const id = window.setTimeout(() => listener({ id: 2, text: `Claude: ${claude.actions[0].text}` }), 1200);
+    return () => window.clearTimeout(id);
+  },
   lockStatus: async () => lockView(),
   pinUnlock: async (code) => {
     if (code === demoPin) {

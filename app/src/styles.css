@@ -2609,3 +2609,70 @@ p {
   background: var(--inset);
   line-height: 1.45;
 }
+
+/* Настройки → Claude: коннектор для приложения Claude. */
+.cloud-check.sub {
+  padding-left: 30px;
+}
+
+.claude-examples {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.link-btn.fold {
+  align-self: flex-start;
+}
+
+.code-box {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--inset);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.claude-action {
+  align-items: flex-start;
+}
+
+.claude-action .link-btn {
+  flex: none;
+}
+
+.struck {
+  text-decoration: line-through;
+}
+
+/* Сообщение о действии Claude — с кнопкой «Вернуть». */
+.toast.with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast.with-action > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toast .toast-btn {
+  flex: none;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

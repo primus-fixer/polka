@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
 mod backup;
+mod claude;
 mod cloud;
 mod guard;
 mod lan;
@@ -511,9 +512,19 @@ fn cover_response(state: &AppState, path: &str) -> tauri::http::Response<Vec<u8>
     resp.unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
 }
 
+/// `polka --mcp`: коннектор для приложения Claude (посредник MCP через stdio), без окна.
+#[cfg(desktop)]
+pub fn mcp_relay() -> i32 {
+    claude::relay()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Второй запуск (например, коннектор Claude запустил «Полку», а она уже открыта) открывает уже работающую.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| claude::show_main(app)));
+    let builder = builder
         .register_uri_scheme_protocol("cover", |ctx, request| {
             let state = ctx.app_handle().state::<AppState>();
             cover_response(&state, request.uri().path())
@@ -545,6 +556,9 @@ pub fn run() {
             backup::clean_uploads(&dir);
             // С PIN-кодом «Полка» открывается заблокированной.
             let guard = Guard::new(guard::has_pin(&store));
+            // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1.
+            #[cfg(desktop)]
+            claude::start(app.handle().clone(), dir.clone());
             app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard: Mutex::new(guard) });
             app.manage(reader::Books::default());
             backup::start_auto(app.handle().clone());
@@ -589,6 +603,10 @@ pub fn run() {
             set_tz,
             cover_bytes,
             save_image,
+            claude::claude_status,
+            claude::claude_set,
+            claude::claude_undo,
+            claude::claude_bundle,
             backup::backup_status,
             backup::backup_password,
             backup::backup_every,
