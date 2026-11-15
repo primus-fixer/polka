@@ -67,6 +67,21 @@ function fileSize(bytes: number): string {
   return bytes >= 1 << 20 ? `${(Math.round(bytes / 104857.6) / 10).toString().replace('.', ',')} МБ` : `${Math.max(1, Math.round(bytes / 1024))} КБ`;
 }
 
+/** Частые жанры — пока своих на полке мало. У книг — с заглавной, как в каталогах книг; у кино — строчными, как в ПоискКино. */
+const BOOK_GENRES = ['Проза', 'Классика', 'Фантастика', 'Фэнтези', 'Детектив', 'Триллер', 'Нон-фикшн', 'История', 'Биография', 'Психология', 'Философия', 'Наука', 'Поэзия', 'Детская'];
+const SCREEN_GENRES = ['драма', 'комедия', 'фантастика', 'фэнтези', 'триллер', 'детектив', 'криминал', 'боевик', 'мелодрама', 'приключения', 'ужасы', 'мультфильм', 'документальный'];
+
+/** Жанры на выбор: что уже есть на полке у книг (или у кино) — сначала частые, — и обычные, всего не меньше 12. */
+function genresFor(t: Title, titles: Title[]): string[] {
+  const book = t.kind === 'book';
+  const counts = new Map<string, number>();
+  for (const x of titles) if ((x.kind === 'book') === book) for (const g of x.genres) counts.set(g, (counts.get(g) ?? 0) + 1);
+  const own = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([g]) => g);
+  const seen = (g: string) => own.some((x) => x.toLowerCase() === g.toLowerCase()) || t.genres.some((x) => x.toLowerCase() === g.toLowerCase());
+  const extra = (book ? BOOK_GENRES : SCREEN_GENRES).filter((g) => !seen(g));
+  return [...own, ...extra].slice(0, Math.max(12, Math.min(own.length, 24)));
+}
+
 export default function Card({ t, titles, nav, wide, library, onForget }: { t: Title; titles: Title[]; nav: Nav; wide: boolean; library: Library; onForget: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(t.note ?? '');
@@ -109,6 +124,7 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
     }
   };
   const knownTags = useMemo(() => [...new Set(titles.flatMap((x) => x.tags))].sort((a, b) => a.localeCompare(b)), [titles]);
+  const knownGenres = useMemo(() => genresFor(t, titles), [t, titles]);
   const series = t.kind === 'series' ? seriesLine(t) : null;
 
   const run = async (p: () => Promise<Title>, done?: string) => {
@@ -406,6 +422,11 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
           <Seg cols small label="Формат" value={t.format ?? 'paper'} options={FORMATS} onChange={(format) => save({ format })} />
         </section>
       )}
+
+      <section className="stack-s">
+        <h2 className="label">Жанр</h2>
+        <TagPicker value={t.genres} known={knownGenres} onChange={(genres) => save({ genres: genres.slice(0, 10) })} placeholder="+ жанр" addLabel="Новый жанр" />
+      </section>
 
       <section className="stack-s">
         <h2 className="label">Метки</h2>

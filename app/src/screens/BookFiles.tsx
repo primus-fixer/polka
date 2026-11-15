@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Nav } from '../App';
 import { api, isMobileApp, message, type FilesSettings } from '../api';
 import { NB, count } from '../format';
+import { Cut } from '../ui';
 
 function size(bytes: number): string {
   if (bytes < 1 << 20) return `${Math.max(1, Math.round(bytes / 1024))}${NB}КБ`;
@@ -36,8 +37,7 @@ export default function BookFilesSection({ nav, onChange }: { nav: Nav; onChange
 
   if (!st) return null;
   return (
-    <section className="stack-s">
-      <h2 className="sec">Файлы книг</h2>
+    <Cut id="files" title="Файлы книг" hint={st.count ? `${count(st.count, 'файл', 'файла', 'файлов')} здесь` : 'файлов нет'}>
       <p className="small muted">
         {st.count
           ? `На этом устройстве ${count(st.count, 'файл', 'файла', 'файлов')} книг — ${size(st.bytes)}.`
@@ -63,6 +63,6 @@ export default function BookFilesSection({ nav, onChange }: { nav: Nav; onChange
           </span>
         </label>
       )}
-    </section>
+    </Cut>
   );
 }

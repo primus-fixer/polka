@@ -2676,3 +2676,144 @@ p {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Настройки под катом: заголовок раздела — строка с подписью состояния, содержимое — по нажатию. */
+.stack.settings {
+  gap: 0;
+}
+
+.settings > .screen-title {
+  margin-bottom: 12px;
+}
+
+.settings > .muted3 {
+  margin-top: 18px;
+}
+
+.cut {
+  border-top: 1px solid var(--line);
+}
+
+.cut:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+
+.cut-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 2px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+
+.cut-title {
+  flex: none;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.cut-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cut-head svg {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink3);
+  transition: transform 0.15s;
+}
+
+.cut-hint + svg {
+  margin-left: 0;
+}
+
+.cut.open .cut-head svg {
+  transform: rotate(180deg);
+}
+
+.cut-body {
+  padding: 2px 0 22px;
+}
+
+/* Своя полоса окна на компьютере: того же цвета, что «Полка» (в читалке — как её тема). */
+:root.own-titlebar {
+  --tb: 32px;
+}
+
+:root.own-titlebar body {
+  padding-top: var(--tb);
+}
+
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  height: var(--tb, 32px);
+  background: var(--tb-bg, var(--bg));
+  color: var(--tb-ink, var(--ink));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tb-drag {
+  flex: 1 1 auto;
+}
+
+.tb-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: default;
+}
+
+.tb-btn svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.tb-btn:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.tb-btn:active {
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.tb-close:hover,
+.tb-close:active {
+  background: #c42b1c;
+  color: #fff;
+}
+
+:root.own-titlebar .sheet-back,
+:root.own-titlebar .reader,
+:root.own-titlebar .rd-wait,
+:root.own-titlebar .lock {
+  top: var(--tb);
+}

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { Nav } from '../App';
 import { api, message, type ClaudeStatus } from '../api';
-import { Icon } from '../ui';
+import { Cut, Icon } from '../ui';
 
 const whenText = (at: number) => {
   const d = new Date(at * 1000);
@@ -34,10 +34,9 @@ export default function ClaudeSection({ nav, onChange }: { nav: Nav; onChange: (
 
   if (!st.desktop)
     return (
-      <section className="stack-s" id="claude">
-        <h2 className="sec">Claude</h2>
+      <Cut id="claude" title="Claude" hint="на компьютере">
         <p className="small muted">Коннектор для приложения Claude — в «Полке» на компьютере: там Claude отвечает на вопросы о полке и, если разрешить, добавляет записи. Сделанное им приходит на телефон при обмене по Wi-Fi или через облако.</p>
-      </section>
+      </Cut>
     );
 
   const set = async (on: boolean, write: boolean, what: 'on' | 'write') => {
@@ -81,8 +80,7 @@ export default function ClaudeSection({ nav, onChange }: { nav: Nav; onChange: (
   };
 
   return (
-    <section className="stack-s" id="claude">
-      <h2 className="sec">Claude</h2>
+    <Cut id="claude" title="Claude" hint={!st.on ? 'выключено' : st.write ? 'чтение и запись' : 'только чтение'}>
       <p className="small muted">«Полка» подключается к приложению Claude на этом компьютере как расширение. В разговоре можно спрашивать о прочитанном и просмотренном, а если разрешить запись — просить добавить книгу, поставить оценку или отметить серии.</p>
       <ul className="small muted claude-examples">
         {EXAMPLES.map((x) => (
@@ -156,6 +154,6 @@ export default function ClaudeSection({ nav, onChange }: { nav: Nav; onChange: (
       <p className="small muted">
         «Полка» ничего не открывает в интернет: приложение Claude запускает polka.exe --mcp, а тот передаёт запросы запущенной «Полке» только внутри компьютера и с ключом, который «Полка» каждый раз создаёт заново. Claude видит только то, что запросит в разговоре по вашей просьбе, — это уходит в Anthropic вместе с разговором. Пока «Полка» заблокирована PIN-кодом, Claude ничего не получает. Ключ API не нужен: разговор идёт в вашем приложении Claude, по вашей подписке.
       </p>
-    </section>
+    </Cut>
   );
 }

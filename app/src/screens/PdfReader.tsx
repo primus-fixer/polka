@@ -14,6 +14,7 @@ import { MarkList, Sheet, THEME_ORDER, highlight, pct, timeLeft, useAndroidBack,
 import { store, stored } from '../storage';
 import { Icon, RatingPicker, Seg } from '../ui';
 import QuotePicture from './QuotePicture';
+import { setTitleBarColors } from '../TitleBar';
 
 type Panel = null | 'toc' | 'look' | 'search' | 'end';
 type Tab = 'toc' | 'bookmarks' | 'quotes';
@@ -831,6 +832,9 @@ export default function PdfReader({ hash, at, nav, titles, onClose }: { hash: st
   const quotes = marks.filter((m) => m.kind === 'quote' && m.book === hash).sort(byPlace);
   const themeId = resolveTheme(look.theme);
   const theme = THEMES[themeId];
+  // Полоса окна на компьютере — цвета темы читалки, после читалки — снова цвета «Полки».
+  useEffect(() => setTitleBarColors(theme.bg, theme.ink), [theme.bg, theme.ink]);
+  useEffect(() => () => setTitleBarColors(null), []);
   const style = {
     '--rd-bg': theme.bg,
     '--rd-ink': theme.ink,

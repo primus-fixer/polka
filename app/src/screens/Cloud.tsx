@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, inApp, message, type CloudLast, type CloudProvider, type CloudStatus, type CloudStep } from '../api';
 import { NB, count } from '../format';
-import { Seg } from '../ui';
+import { Cut, Seg } from '../ui';
 import { whenText } from './Backup';
 
 
@@ -214,8 +214,7 @@ export default function CloudSection() {
   const davLink = st?.provider ?? null;
 
   return (
-    <section className="stack-s cloud" id="cloud">
-      <h2 className="sec">Облако</h2>
+    <Cut id="cloud" title="Облако" className="cloud" hint={!st ? undefined : st.state === 'off' ? 'не подключено' : st.state === 'ready' ? (st.title ?? 'подключено') : 'нужно войти'}>
       {st?.state === 'off' && !form && (
         <>
           <p className="small muted">
@@ -372,6 +371,6 @@ export default function CloudSection() {
       {notice && <p className="small muted">{notice}</p>}
       {error && <p className="small warn-text">{error}</p>}
       {!inApp && <p className="small muted">В демо облако понарошку: вход и обмен только изображаются, файлы никуда не уходят.</p>}
-    </section>
+    </Cut>
   );
 }

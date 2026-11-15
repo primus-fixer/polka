@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { coverSrc, type Kind, type Title } from './api';
 import { ICONS } from './icons';
+import { store, stored } from './storage';
 
 export function Icon({ name, size = 20, stroke = 1.75, style }: { name: string; size?: number; stroke?: number; style?: CSSProperties }) {
   return (
@@ -120,19 +121,22 @@ export function RatingPicker({ value, onChange }: { value: number | null | undef
   );
 }
 
-export function TagPicker({ value, known, onChange }: { value: string[]; known: string[]; onChange: (v: string[]) => void }) {
+export function TagPicker({ value, known, onChange, placeholder = '+ метка', addLabel = 'Новая метка' }: { value: string[]; known: string[]; onChange: (v: string[]) => void; placeholder?: string; addLabel?: string }) {
   const [draft, setDraft] = useState('');
-  const all = [...new Set([...known, ...value])];
-  const toggle = (t: string) => onChange(value.includes(t) ? value.filter((x) => x !== t) : [...value, t]);
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const isOn = (t: string) => value.some((v) => same(v, t));
+  // Порядок не прыгает при выборе; своё, которого нет среди известных, — в конце.
+  const all = [...known, ...value.filter((v) => !known.some((k) => same(k, v)))];
+  const toggle = (t: string) => onChange(isOn(t) ? value.filter((x) => !same(x, t)) : [...value, t]);
   const add = () => {
     const t = draft.trim();
-    if (t && !value.includes(t)) onChange([...value, t]);
+    if (t && !isOn(t)) onChange([...value, t]);
     setDraft('');
   };
   return (
     <div className="chips">
       {all.map((t) => (
-        <button key={t} type="button" className={`chip${value.includes(t) ? ' sel' : ''}`} aria-pressed={value.includes(t)} onClick={() => toggle(t)}>
+        <button key={t} type="button" className={`chip${isOn(t) ? ' sel' : ''}`} aria-pressed={isOn(t)} onClick={() => toggle(t)}>
           {t}
         </button>
       ))}
@@ -143,9 +147,32 @@ export function TagPicker({ value, known, onChange }: { value: string[]; known: 
           add();
         }}
       >
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder="+ метка" aria-label="Новая метка" maxLength={40} />
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder={placeholder} aria-label={addLabel} maxLength={40} />
       </form>
     </div>
+  );
+}
+
+/** Раздел под катом: заголовок — кнопка, содержимое — по нажатию; открытые разделы запоминаются на устройстве. */
+export function Cut({ id, title, hint, className, children }: { id: string; title: string; hint?: string; className?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(() => stored(`cut.${id}`, '0') === '1');
+  const toggle = () => {
+    store(`cut.${id}`, open ? '0' : '1');
+    setOpen(!open);
+  };
+  return (
+    <section className={`cut${open ? ' open' : ''}${className ? ` ${className}` : ''}`} id={id}>
+      <button type="button" className="cut-head" aria-expanded={open} aria-controls={`${id}-body`} onClick={toggle}>
+        <span className="cut-title">{title}</span>
+        {hint && <span className="cut-hint">{hint}</span>}
+        <Icon name="down" size={18} stroke={2} />
+      </button>
+      {open && (
+        <div className="stack-s cut-body" id={`${id}-body`}>
+          {children}
+        </div>
+      )}
+    </section>
   );
 }
 

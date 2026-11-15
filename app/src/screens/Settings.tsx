@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Nav } from '../App';
 import { api, inApp, message, type Goal, type Settings as S } from '../api';
+import { plural } from '../format';
 import { SCHEMES, type ThemeMode } from '../theme';
-import { Seg } from '../ui';
+import { Cut, Seg } from '../ui';
 import BackupSection from './Backup';
 import BookFilesSection from './BookFiles';
 import ClaudeSection from './Claude';
@@ -31,6 +32,12 @@ const METHOD: Record<string, string> = {
   file: 'ключ базы — в файле рядом с базой (режим разработки)',
   demo: 'демо в браузере: данные не сохраняются',
 };
+
+/** «24 книги и 12 фильмов» или «не задана». */
+function goalHint(g: Goal): string {
+  const parts = [g.books ? plural(g.books, 'книга', 'книги', 'книг') : '', g.screen ? plural(g.screen, 'фильм', 'фильма', 'фильмов') : ''].filter(Boolean);
+  return parts.length ? parts.join(' и ') : 'не задана';
+}
 
 export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav, security }: Props) {
   const [info, setInfo] = useState<S | null>(null);
@@ -72,8 +79,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
     <div className="stack settings">
       <h1 className="screen-title">Настройки</h1>
 
-      <section className="stack-s">
-        <h2 className="sec">Вид</h2>
+      <Cut id="look" title="Вид" hint={`${SCHEMES[scheme]?.name ?? ''}, ${mode === 'dark' ? 'тёмная' : mode === 'light' ? 'светлая' : 'как в системе'}`}>
         <div className="schemes" role="group" aria-label="Расцветка">
           {Object.entries(SCHEMES).map(([id, s]) => {
             const t = dark ? s.dark : s.light;
@@ -97,10 +103,9 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
           ]}
           onChange={setMode}
         />
-      </section>
+      </Cut>
 
-      <section className="stack-s">
-        <h2 className="sec">Цель на {year} год</h2>
+      <Cut id="goal" title={`Цель на ${year} год`} hint={goalHint(goal)}>
         <div className="two">
           <label className="field">
             <span>Книг</span>
@@ -114,10 +119,9 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         <button type="button" className="btn line" onClick={saveGoal}>
           Сохранить цель
         </button>
-      </section>
+      </Cut>
 
-      <section className="stack-s">
-        <h2 className="sec">Каталоги</h2>
+      <Cut id="catalogs" title="Каталоги" hint={info ? (info.has_poiskkino ? 'книги и кино' : 'книги; для кино нужен ключ') : undefined}>
         <div className="row block">
           <span>Книги</span>
           <span className="small muted">Open Library, Google Books и FantLab — работают без ключа.</span>
@@ -169,7 +173,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
           <p className="small muted">{info?.has_google ? 'Ключ указан. Бесплатно — до 1000 запросов в день.' : 'Без ключа Google отвечает не из всех сетей. С ключом — до 1000 запросов в день.'}</p>
         </form>
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
-      </section>
+      </Cut>
 
       <ClaudeSection nav={nav} onChange={onSynced} />
 
@@ -183,13 +187,12 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
 
       <SecuritySection sec={security} />
 
-      <section className="stack-s">
-        <h2 className="sec">Данные</h2>
+      <Cut id="data" title="Данные">
         <p className="small muted">
           Записи и обложки — в зашифрованной базе на устройстве{info ? `; ${METHOD[info.key_method] ?? info.key_method}` : ''}. На другие устройства они уходят только по Wi-Fi или через облако — зашифрованными.
         </p>
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
-      </section>
+      </Cut>
 
       <p className="small muted3">Полка {__APP_VERSION__}</p>
     </div>
