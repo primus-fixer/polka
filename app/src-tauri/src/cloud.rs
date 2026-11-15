@@ -218,6 +218,13 @@ pub struct Last {
     pub files_received: usize,
     pub files_sent: usize,
     pub files_waiting: usize,
+    /// Файлы книг: пришло, ушло, ещё не в облаке целиком.
+    #[serde(default)]
+    pub books_received: usize,
+    #[serde(default)]
+    pub books_sent: usize,
+    #[serde(default)]
+    pub books_waiting: usize,
     #[serde(default)]
     pub problems: Vec<String>,
 }
@@ -602,11 +609,11 @@ fn run_round(app: &AppHandle) -> Option<CloudFail> {
     let _ = st.set_meta(META_STATE, &serde_json::to_string(&cstate).unwrap_or_default());
     match result {
         Ok(r) => {
-            let last = Last { at: now(), received: r.received, sent: r.sent, files_received: r.files_received, files_sent: r.files_sent, files_waiting: r.files_waiting, problems: r.problems };
+            let last = Last { at: now(), received: r.received, sent: r.sent, files_received: r.files_received, files_sent: r.files_sent, files_waiting: r.files_waiting, books_received: r.books_received, books_sent: r.books_sent, books_waiting: r.books_waiting, problems: r.problems };
             let _ = st.set_meta(META_LAST, &serde_json::to_string(&last).unwrap_or_default());
             clear(&st, &[META_ERROR]);
             drop(st);
-            emit(app, CloudEvent { running: false, received: r.received + r.files_received, step: None });
+            emit(app, CloudEvent { running: false, received: r.received + r.files_received + r.books_received, step: None });
             None
         }
         Err(e) => {

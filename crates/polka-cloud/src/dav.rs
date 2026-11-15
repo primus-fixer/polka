@@ -174,7 +174,7 @@ impl Dav {
 
     /// После удаления данных из облака: убирает пустые папки «Полки». Чужие файлы не трогает.
     pub fn tidy(&self) -> Result<()> {
-        for dir in [Dir::Events, Dir::Blobs, Dir::Root] {
+        for dir in [Dir::Events, Dir::Blobs, Dir::Books, Dir::Root] {
             let Some(items) = self.propfind(&self.folder_url(dir), "1", LIST)? else { continue };
             // Сама папка — первый ответ; другого ничего нет — папка пустая.
             if items.len() <= 1 {

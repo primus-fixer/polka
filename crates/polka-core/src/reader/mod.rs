@@ -1,15 +1,17 @@
-//! Читалка: книги EPUB и FB2.
+//! Читалка: книги EPUB, FB2 и PDF.
 //!
 //! Книга открывается из байтов файла целиком, на диск ничего не распаковывается. Главы сразу
 //! переводятся в безопасное дерево для страницы (`tree`): EPUB — из XHTML с учётом стилей книги
 //! (`html`, `css`), FB2 — из его разметки (`fb2`). Картинки отдаются по пути внутри книги.
 //! Место чтения (`Reading`) — запись журнала: обменивается между устройствами, как полка.
+//! PDF ядро не разбирает на главы: из файла — только сведения для полки (`pdf`), страницы рисует интерфейс.
 
 pub mod css;
 pub mod epub;
 pub mod fb2;
 pub mod html;
 pub mod markup;
+pub mod pdf;
 pub mod shelf;
 pub mod tree;
 
@@ -26,6 +28,8 @@ pub const MAX_BOOK: usize = 100 << 20;
 const MAX_ENTRY: u64 = 64 << 20;
 const MAX_ENTRIES: usize = 20_000;
 const MAX_CHAPTERS: usize = 5000;
+/// Место в книге — номер главы EPUB/FB2 или страницы PDF — не больше этого.
+const MAX_PLACE: usize = 100_000;
 const MAX_TOC: usize = 5000;
 /// Запись журнала с местом чтения: по одной на книгу полки.
 pub const READING: &str = "reading";
@@ -37,6 +41,7 @@ pub const MARK: &str = "mark";
 pub enum BookFormat {
     Epub,
     Fb2,
+    Pdf,
 }
 
 /// Что известно о книге из самого файла.
@@ -122,7 +127,10 @@ impl Book {
         if fb2::looks_like(&data) {
             return fb2::open(&data);
         }
-        Err(bad("Это не книга EPUB или FB2"))
+        if pdf::looks_like(&data) {
+            return Err(bad("Это PDF: его страницы показывает читалка PDF"));
+        }
+        Err(bad("Это не книга EPUB, FB2 или PDF"))
     }
 
     /// Глава для страницы: JSON дерева (см. `tree`).
@@ -549,7 +557,7 @@ impl Reading {
         if self.title.is_empty() || self.title.len() > 64 || !hex64(&self.book) {
             return Err(Error::Format("неверная запись о чтении".into()));
         }
-        if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_CHAPTERS {
+        if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_PLACE {
             return Err(Error::Format("неверное место в книге".into()));
         }
         let year = |y: &str| y.len() == 4 && y.bytes().all(|b| b.is_ascii_digit());
@@ -606,7 +614,7 @@ impl Mark {
         if self.note.chars().count() > 2000 {
             return Err(Error::Format("Заметка к цитате длиннее 2000 знаков".into()));
         }
-        if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_CHAPTERS {
+        if !self.percent.is_finite() || !(0.0..=100.0).contains(&self.percent) || self.chapter as usize > MAX_PLACE {
             return Err(Error::Format("неверное место в книге".into()));
         }
         if self.kind == MarkKind::Quote && (self.end <= self.offset || self.text.trim().is_empty()) {

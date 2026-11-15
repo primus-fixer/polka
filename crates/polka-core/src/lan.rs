@@ -819,6 +819,63 @@ mod tests {
         server.stop();
     }
 
+    /// Файлы книг: каждая сторона забирает недостающие, если обмен файлами включён у обеих.
+    #[test]
+    fn book_files_travel_when_both_sides_agree() {
+        use crate::files::{self, BookFile, FILE, SYNC_KEY};
+        use crate::reader::BookFormat;
+        let dir = tempfile::tempdir().unwrap();
+        let laptop = side(dir.path(), "laptop", "Ноутбук");
+        let phone = side(dir.path(), "phone", "Телефон");
+        for (s, name) in [(&laptop, "laptop"), (&phone, "phone")] {
+            lock(&s.store).set_books_dir(dir.path().join(format!("{name}-books")));
+        }
+        // На ноутбуке — большой PDF (3 куска), на телефоне — маленький FB2.
+        let pdf: Vec<u8> = b"%PDF-1.7\n".iter().copied().chain((0..(files::PART * 2 + 99)).map(|i| (i % 253) as u8)).collect();
+        let fb2 = "<FictionBook>Лавр</FictionBook>".as_bytes().to_vec();
+        let add = |s: &Side, tid: &str, data: &[u8], format: BookFormat, ext: &str| {
+            let mut st = lock(&s.store);
+            st.put(KIND, tid, &title(tid, "Книга")).unwrap();
+            let id = crate::db::blob_id(data);
+            let d = st.books_dir().unwrap().to_path_buf();
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join(format!("{id}.{ext}")), data).unwrap();
+            st.put(FILE, &id, &BookFile { id: id.clone(), title: tid.into(), name: format!("book.{ext}"), format, size: data.len() as u64, added: 1 }).unwrap();
+            id
+        };
+        let pdf_id = add(&laptop, "t-pdf", &pdf, BookFormat::Pdf, "pdf");
+        let fb2_id = add(&phone, "t-fb2", &fb2, BookFormat::Fb2, "fb2");
+        let server = Server::start(laptop.host.clone(), 0).unwrap();
+        *lock(&laptop.host.code) = Some(CodeState::new("6WVGHEWK".into()));
+        let pk = phone.keys.clone();
+        // Обмен файлами выключен: записи пришли, файлы — нет.
+        let (_, r) = pair_join(local(server.port), "6WVGHEWK", &phone.store, "phone", "Телефон", &|p, k| {
+            lock(&pk).insert(p.device.clone(), *k);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!((r.books_sent, r.books_received), (0, 0));
+        assert_eq!(files::wanted(&lock(&phone.store)).unwrap().len(), 1, "телефон знает о PDF");
+        let kp = lock(&phone.keys).get("laptop").copied().unwrap();
+        // Включили только на телефоне: ноутбук не отдаёт и не берёт.
+        lock(&phone.store).set_meta(SYNC_KEY, "1").unwrap();
+        let r = sync_peer(local(server.port), "phone", "laptop", "Ноутбук", &kp, &phone.store, "Телефон").unwrap();
+        assert_eq!((r.books_sent, r.books_received), (0, 0));
+        // Включили на обоих: PDF — на телефон, FB2 — на ноутбук.
+        lock(&laptop.store).set_meta(SYNC_KEY, "1").unwrap();
+        let r = sync_peer(local(server.port), "phone", "laptop", "Ноутбук", &kp, &phone.store, "Телефон").unwrap();
+        assert_eq!((r.books_sent, r.books_received), (1, 1), "{r:?}");
+        let got = files::path_in(lock(&phone.store).books_dir().unwrap(), &pdf_id).unwrap();
+        assert_eq!(std::fs::read(got).unwrap(), pdf);
+        assert!(files::path_in(lock(&laptop.store).books_dir().unwrap(), &fb2_id).is_some());
+        assert_eq!(files::local(&lock(&laptop.store), &fb2_id).unwrap().title, "t-fb2");
+        // Больше передавать нечего.
+        let r = sync_peer(local(server.port), "phone", "laptop", "Ноутбук", &kp, &phone.store, "Телефон").unwrap();
+        assert_eq!((r.books_sent, r.books_received), (0, 0));
+        server.stop();
+        assert!(crate::sync::speaks_files("0.8.0") && crate::sync::speaks_files("1.0") && !crate::sync::speaks_files("0.7.3"));
+    }
+
     #[test]
     fn five_wrong_codes_cancel_the_code() {
         let dir = tempfile::tempdir().unwrap();

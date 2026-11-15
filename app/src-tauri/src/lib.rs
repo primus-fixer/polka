@@ -4,7 +4,8 @@
 //! Поиск в каталогах и скачивание обложек идут в фоновом потоке, чтобы окно не замирало.
 //! Снимки обложек отдаёт протокол `cover` (адрес `cover://localhost/<id>` или
 //! `http://cover.localhost/<id>` на Windows и Android) — так экран не гоняет картинки через команды.
-//! Картинки книг в читалке — протокол `book` (см. `reader`).
+//! Картинки книг в читалке — протокол `book` (см. `reader`). Вход по PIN-коду и отпечатку — `guard`:
+//! пока «Полка» заблокирована, команды с данными отвечают `locked`.
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -19,9 +20,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
 
 mod backup;
+mod claude;
 mod cloud;
+mod guard;
 mod lan;
 mod reader;
+
+use guard::{Guard, LOCKED};
 
 /// Версия «Полки» — пишется в резервные копии.
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -38,11 +43,28 @@ struct AppState {
     name: String,
     /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
     lan: lan::Lan,
+    /// Вход по PIN-коду: заблокирована ли «Полка».
+    guard: Mutex<Guard>,
 }
 
 impl AppState {
+    /// База для команд с данными: пока «Полка» заблокирована, ответ — `locked`.
     fn store(&self) -> Res<MutexGuard<'_, Store>> {
+        self.unlocked()?;
+        self.db()
+    }
+
+    /// База без проверки входа — для фоновой работы (автокопии) и самого входа.
+    fn db(&self) -> Res<MutexGuard<'_, Store>> {
         self.store.lock().map_err(|_| "база занята — попробуйте ещё раз".to_string())
+    }
+
+    /// Пока «Полка» заблокирована, команды с данными отвечают `locked`.
+    fn unlocked(&self) -> Res<()> {
+        if self.guard.lock().map_err(err)?.locked {
+            return Err(LOCKED.into());
+        }
+        Ok(())
     }
 
     fn keys(&self) -> Keys {
@@ -335,7 +357,7 @@ async fn set_cover_url(state: State<'_, AppState>, id: String, url: String, labe
 }
 
 /// Снимок из data URL (`data:image/jpeg;base64,…`): тип проверяется по содержимому.
-fn decode_data_url(data_url: &str) -> Res<(String, Vec<u8>)> {
+pub(crate) fn decode_data_url(data_url: &str) -> Res<(String, Vec<u8>)> {
     let (head, body) = data_url.split_once(',').ok_or("снимок не прочитался")?;
     if !head.starts_with("data:image/") || !head.ends_with(";base64") {
         return Err("подходят только снимки JPEG, PNG и WebP".into());
@@ -490,9 +512,19 @@ fn cover_response(state: &AppState, path: &str) -> tauri::http::Response<Vec<u8>
     resp.unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
 }
 
+/// `polka --mcp`: коннектор для приложения Claude (посредник MCP через stdio), без окна.
+#[cfg(desktop)]
+pub fn mcp_relay() -> i32 {
+    claude::relay()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Второй запуск (например, коннектор Claude запустил «Полку», а она уже открыта) открывает уже работающую.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| claude::show_main(app)));
+    let builder = builder
         .register_uri_scheme_protocol("cover", |ctx, request| {
             let state = ctx.app_handle().state::<AppState>();
             cover_response(&state, request.uri().path())
@@ -504,7 +536,7 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(move || responder.respond(reader::response(&app, &path)));
         });
     #[cfg(mobile)]
-    let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    let builder = builder.plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_biometric::init());
     // Окно выбора папки для резервных копий.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
@@ -516,24 +548,45 @@ pub fn run() {
             let db = dir.join("polka.db");
             let me = load_identity(&dir)?;
             let key = load_key(&dir, &db)?;
-            let store = Store::open(&db, &key, &me.id).map_err(err)?;
+            let mut store = Store::open(&db, &key, &me.id).map_err(err)?;
+            // Файлы книг: своя папка; открытые до 0.8.0 — записать в журнал, чтобы о них узнали другие устройства.
+            store.set_books_dir(dir.join("books"));
+            let _ = polka_core::files::adopt(&mut store);
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
-            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default() });
+            // С PIN-кодом «Полка» открывается заблокированной.
+            let guard = Guard::new(guard::has_pin(&store));
+            #[cfg(desktop)]
+            let claude_dir = dir.clone();
+            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard: Mutex::new(guard) });
             app.manage(reader::Books::default());
+            // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1 —
+            // после того как база открыта, чтобы первый же запрос нашёл её.
+            #[cfg(desktop)]
+            claude::start(app.handle().clone(), claude_dir);
             backup::start_auto(app.handle().clone());
             lan::start(app.handle().clone());
             cloud::start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| match event {
-            // Вернулись в «Полку» — пора обменяться через облако, если давно не обменивались.
-            tauri::WindowEvent::Focused(true) => cloud::resumed(),
+            // Свернули или вернулись: через 5 минут в фоне — блокировка (с PIN-кодом); вернулись —
+            // пора обменяться через облако, если давно не обменивались.
+            tauri::WindowEvent::Focused(focused) => guard::on_focus(window.app_handle(), *focused),
             // Файл книги перетащили в окно — открыть в читалке.
             tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => reader::dropped(window.app_handle(), paths),
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            guard::lock_status,
+            guard::pin_unlock,
+            guard::pin_set,
+            guard::pin_off,
+            guard::bio_unlock,
+            guard::bio_set,
+            guard::pin_recover,
+            guard::lock_now,
+            guard::app_visible,
             titles,
             save_title,
             delete_title,
@@ -553,6 +606,10 @@ pub fn run() {
             set_tz,
             cover_bytes,
             save_image,
+            claude::claude_status,
+            claude::claude_set,
+            claude::claude_undo,
+            claude::claude_bundle,
             backup::backup_status,
             backup::backup_password,
             backup::backup_every,
@@ -582,6 +639,12 @@ pub fn run() {
             reader::book_import_incoming,
             reader::book_open,
             reader::book_chapter,
+            reader::book_data,
+            reader::book_cover,
+            reader::book_elsewhere,
+            reader::book_unskip,
+            reader::files_settings,
+            reader::files_set,
             reader::book_search,
             reader::book_files,
             reader::book_forget,

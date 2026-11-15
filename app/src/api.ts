@@ -99,7 +99,7 @@ export type YearStats = {
 export type Settings = { goal: Goal; has_poiskkino: boolean; has_google: boolean; key_method: string };
 
 export type BackupEvery = 'day' | 'week' | 'off';
-export type BackupLast = { at: number; path: string; auto: boolean; bytes: number; events: number; blobs: number };
+export type BackupLast = { at: number; path: string; auto: boolean; bytes: number; events: number; blobs: number; books?: number };
 export type BackupStatus = {
   /** Копии делает это устройство (компьютер). */
   desktop: boolean;
@@ -117,8 +117,8 @@ export type BackupStatus = {
   /** Подключено облако: оно зашифровано тем же паролем. */
   cloud: boolean;
 };
-export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; bytes: number };
-export type RestoreResult = { events: number; blobs: number; titles: number; list: Title[] };
+export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; books: number; bytes: number };
+export type RestoreResult = { events: number; blobs: number; books: number; titles: number; list: Title[] };
 
 /** Показанный код связи: «6WVG-HEWK», сколько секунд ещё действует, сколько попыток осталось; QR — код и адрес для телефона. */
 export type LanCode = { code: string; secs: number; left: number; wrong: number; qr_svg: string; hosts: string[]; port: number };
@@ -133,8 +133,8 @@ export type LanEvent = { received: number; paired: string | null };
 
 /** Облако: Яндекс Диск по паролю приложения или свой сервер WebDAV. */
 export type CloudProvider = 'yadisk' | 'webdav';
-export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number };
-export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; problems: string[] };
+export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number } | { step: 'books'; done: number; total: number };
+export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; books_received?: number; books_sent?: number; books_waiting?: number; problems: string[] };
 export type CloudProblem = { kind: 'auth' | 'space' | 'offline' | 'server' | 'gone' | 'replaced' | 'conflict' | 'newer' | 'format' | 'cancelled'; text: string; at: number };
 export type CloudStatus = {
   desktop: boolean;
@@ -160,7 +160,7 @@ export type CloudEvent = { running: boolean; received: number; step: CloudStep |
 
 // ——— Читалка ———
 
-export type FileFormat = 'epub' | 'fb2';
+export type FileFormat = 'epub' | 'fb2' | 'pdf';
 export type BookMeta = { title: string; authors: string[]; lang?: string; year?: string; publisher?: string; isbn?: string; about?: string; genres: string[] };
 /** Глава: название и объём в знаках (по нему считается процент). */
 export type BookChapter = { title: string; size: number };
@@ -175,10 +175,60 @@ export type Reading = { title: string; book: string; chapter: number; offset: nu
 export type MarkKind = 'bookmark' | 'quote';
 /** Закладка или цитата (запись журнала): место в книге, текст, своя заметка. */
 export type Mark = { id: string; title: string; book: string; kind: MarkKind; chapter: number; offset: number; end: number; text?: string; note?: string; percent: number; created: number };
-export type Imported = { hash: string; title: Title; created: boolean };
+export type Imported = { hash: string; title: Title; created: boolean; format: FileFormat };
+/** Файл книги на другом устройстве (запись пришла с журналом); `skipped` — убран отсюда, сам не придёт. */
+export type RemoteBook = { hash: string; title: string; name: string; format: FileFormat; size: number; skipped: boolean };
+/** Файлы книг на этом устройстве: обмен ими, в резервной копии ли они, сколько их здесь. */
+export type FilesSettings = { sync: boolean; backup: boolean; count: number; bytes: number };
 /** Узел главы: текст или [тег, атрибуты, …дети] — страница строит его сама, без innerHTML. */
 export type BookNode = string | [string, Record<string, string>, ...BookNode[]];
 export type BookDrop = { ok?: Imported; error?: string };
+
+// ——— Вход ———
+
+/** Ответ команд с данными, пока «Полка» заблокирована. */
+export const LOCKED = 'locked';
+/** Вход: PIN-код, отпечаток или Windows Hello, паузы после ошибок, сброс забытого PIN. */
+export type LockStatus = {
+  pin: boolean;
+  locked: boolean;
+  /** Вход по отпечатку или Windows Hello включён. */
+  bio: boolean;
+  /** …и доступен на устройстве сейчас. */
+  bio_ready: boolean;
+  bio_kind: '' | 'fingerprint' | 'face' | 'hello';
+  /** Чем подтвердить себя, если PIN забыт: device (экран блокировки телефона), hello или пусто. */
+  recover: '' | 'device' | 'hello';
+  /** Секунд до следующей попытки. */
+  wait: number;
+  /** Сколько ещё можно ошибиться до паузы. */
+  left: number;
+  /** Устройство подтвердило владельца — можно задать новый PIN без старого. */
+  recovery: boolean;
+  /** Чем защищён ключ базы. */
+  key: string;
+  error: string | null;
+};
+
+// ——— Коннектор для приложения Claude (компьютер) ———
+
+/** Действие Claude, которое можно отменить. */
+export type ClaudeAction = { id: number; at: number; tool: string; text: string; undone: boolean };
+export type ClaudeStatus = {
+  /** Коннектор есть только на компьютере. */
+  desktop: boolean;
+  on: boolean;
+  write: boolean;
+  /** Путь к polka.exe и папка данных — для ручной настройки. */
+  command: string;
+  dir: string;
+  /** Готовый текст для claude_desktop_config.json. */
+  config: string;
+  /** Новые сверху. */
+  actions: ClaudeAction[];
+};
+/** Claude что-то записал: `text` — «Claude: Добавлено: …». */
+export type ClaudeEvent = { id: number; text: string };
 
 /** Файл копии уходит в ядро кусками по 4 МБ: на телефоне его иначе не прочитать. */
 const UPLOAD_CHUNK = 4 << 20;
@@ -187,6 +237,33 @@ const UPLOAD_CHUNK = 4 << 20;
 export const inApp = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 const real = {
+  lockStatus: () => invoke<LockStatus>('lock_status'),
+  pinUnlock: (code: string) => invoke<LockStatus>('pin_unlock', { code }),
+  /** Новый PIN; `current` — нынешний (если PIN уже есть и это не сброс). */
+  pinSet: (code: string, current: string | null) => invoke<LockStatus>('pin_set', { code, current }),
+  pinOff: (current: string | null) => invoke<LockStatus>('pin_off', { current }),
+  bioUnlock: () => invoke<LockStatus>('bio_unlock'),
+  bioSet: (on: boolean) => invoke<LockStatus>('bio_set', { on }),
+  /** «Забыли PIN?»: подтвердить себя блокировкой устройства. */
+  pinRecover: () => invoke<LockStatus>('pin_recover'),
+  lockNow: () => invoke<LockStatus>('lock_now'),
+  /** Экран свернули или снова открыли. */
+  appVisible: (visible: boolean) => invoke<LockStatus>('app_visible', { visible }),
+  /** «Полка» заблокировалась сама (5 минут в фоне). */
+  onLocked: async (listener: () => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen('locked', listener);
+  },
+  claudeStatus: () => invoke<ClaudeStatus>('claude_status'),
+  claudeSet: (on: boolean, write: boolean) => invoke<ClaudeStatus>('claude_set', { on, write }),
+  /** Отменить действие Claude («Вернуть»). */
+  claudeUndo: (id: number) => invoke<ClaudeStatus>('claude_undo', { id }),
+  /** Расширение «Полка для Claude.mcpb» — в «Загрузки»; `open` — сразу открыть: Claude предложит установить. */
+  claudeBundle: (open: boolean) => invoke<string>('claude_bundle', { open }),
+  onClaude: async (listener: (e: ClaudeEvent) => void): Promise<() => void> => {
+    const { listen } = await import('@tauri-apps/api/event');
+    return listen<ClaudeEvent>('claude', (ev) => listener(ev.payload));
+  },
   titles: () => invoke<Title[]>('titles'),
   save: (title: Title) => invoke<Title>('save_title', { title, today: todayIso() }),
   remove: (id: string) => invoke<void>('delete_title', { id }),
@@ -238,6 +315,16 @@ const real = {
   bookSearch: (hash: string, query: string) => invoke<BookHit[]>('book_search', { hash, query }),
   bookFiles: () => invoke<LocalBook[]>('book_files'),
   bookForget: (hash: string) => invoke<void>('book_forget', { hash }),
+  /** PDF целиком — его страницы рисует pdf.js. */
+  bookData: (hash: string) => invoke<ArrayBuffer>('book_data', { hash }),
+  /** Обложка PDF (первая страница картинкой) — если у записи её ещё нет. */
+  bookCover: (hash: string, dataUrl: string) => invoke<Title | null>('book_cover', { hash, dataUrl }),
+  /** Файлы книг, которые есть только на других устройствах. */
+  bookElsewhere: () => invoke<RemoteBook[]>('book_elsewhere'),
+  /** Убранный файл снова придёт при обмене. */
+  bookUnskip: (hash: string) => invoke<void>('book_unskip', { hash }),
+  filesSettings: () => invoke<FilesSettings>('files_settings'),
+  filesSet: (what: 'sync' | 'backup', on: boolean) => invoke<FilesSettings>('files_set', { what, on }),
   readings: () => invoke<Reading[]>('reading_list'),
   readingSave: (reading: Reading) => invoke<void>('reading_save', { reading }),
   /** Закладки и цитаты: все или одной записи. */

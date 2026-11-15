@@ -56,12 +56,21 @@ export function span(start?: string, end?: string): string {
   return one ? dayMonth(one) : '';
 }
 
-/** «1 книга», «2 книги», «5 книг». */
-export function plural(n: number, one: string, few: string, many: string): string {
+/** Слово к числу: «книга», «книги», «книг». */
+export function pluralWord(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10;
   const m100 = n % 100;
-  const w = m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
-  return `${n}${NB}${w}`;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+}
+
+/** «1 книга», «2 книги», «5 книг». */
+export function plural(n: number, one: string, few: string, many: string): string {
+  return `${n}${NB}${pluralWord(n, one, few, many)}`;
+}
+
+/** «1 234 записи» — с разделителем тысяч. */
+export function count(n: number, one: string, few: string, many: string): string {
+  return `${n.toLocaleString('ru-RU')}${NB}${pluralWord(n, one, few, many)}`;
 }
 
 /** «6 240» */

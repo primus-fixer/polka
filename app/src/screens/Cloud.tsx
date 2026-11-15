@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, inApp, message, type CloudLast, type CloudProvider, type CloudStatus, type CloudStep } from '../api';
-import { NB, plural } from '../format';
+import { NB, count } from '../format';
 import { Seg } from '../ui';
 import { whenText } from './Backup';
 
-const count = (n: number, one: string, few: string, many: string) => `${n.toLocaleString('ru-RU')}${NB}${plural(n, one, few, many)}`;
 
 const EVERY: [CloudStatus['every'], string][] = [
   ['auto', 'Сам'],
@@ -14,12 +13,16 @@ const EVERY: [CloudStatus['every'], string][] = [
 export function stepText(s: CloudStep | null): string {
   if (!s || s.step === 'events') return 'Обмениваюсь записями…';
   const n = `${Math.min(s.done + 1, s.total)} из ${s.total}`;
+  if (s.step === 'books') return `Файлы книг: ${n}`;
   return s.step === 'upload' ? `Отправляю обложки: ${n}` : `Получаю обложки: ${n}`;
 }
 
 export function lastText(l: CloudLast): string {
   const parts = [`получено ${l.received}, отправлено ${l.sent}`];
   if (l.files_received + l.files_sent > 0) parts.push(`обложек: получено ${l.files_received}, отправлено ${l.files_sent}`);
+  const br = l.books_received ?? 0;
+  const bs = l.books_sent ?? 0;
+  if (br + bs > 0) parts.push(`файлов книг: получено ${br}, отправлено ${bs}`);
   return parts.join('; ');
 }
 
@@ -304,6 +307,9 @@ export default function CloudSection() {
               )}
             </span>
           </div>
+          {!st.running && st.last && (st.last.books_waiting ?? 0) > 0 && (
+            <p className="small muted">Ещё {count(st.last.books_waiting ?? 0, 'файл книги придёт', 'файла книг придут', 'файлов книг придут')}, когда другое устройство отправит их в облако целиком.</p>
+          )}
           {!st.running && st.last && st.last.files_waiting > 0 && (
             <p className="small muted">Ещё {count(st.last.files_waiting, 'обложка придёт', 'обложки придут', 'обложек придут')}, когда их отправит другое устройство.</p>
           )}

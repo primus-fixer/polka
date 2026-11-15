@@ -44,7 +44,7 @@ function metaLine(t: Title): string {
 }
 
 /** Какие файлы предлагать в окне выбора. На Android формат FB2 системе не знаком — там без отбора. */
-export const BOOK_ACCEPT = isMobileApp ? undefined : '.epub,.fb2,.zip,application/epub+zip,application/x-fictionbook+xml';
+export const BOOK_ACCEPT = isMobileApp ? undefined : '.epub,.fb2,.zip,.pdf,application/epub+zip,application/x-fictionbook+xml,application/pdf';
 
 /** «45 %», «4,5 %». */
 export function readPct(p: number): string {
@@ -79,6 +79,8 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
   const file = useRef<HTMLInputElement>(null);
   const bookInput = useRef<HTMLInputElement>(null);
   const bookFile = t.kind === 'book' ? library.files.find((f) => f.title === t.id) : undefined;
+  // Файла здесь нет, но он есть на другом устройстве.
+  const remote = t.kind === 'book' && !bookFile ? library.elsewhere.find((f) => f.title === t.id) : undefined;
   const reading = library.readings.find((r) => r.title === t.id);
   const readable = t.kind === 'book' && t.format !== 'audio';
   const [quotes, setQuotes] = useState<Mark[]>([]);
@@ -209,11 +211,40 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
               <span className="small muted">
                 Прочитано {readPct(reading.percent)}
                 {reading.minutes > 0 ? ` · ${readTime(reading.minutes)} за чтением` : ''}
-                {!bookFile ? ' · файл — на другом устройстве' : ''}
+                {!bookFile && !remote ? ' · файл — на другом устройстве' : ''}
               </span>
             </div>
           )}
-          {!bookFile && <p className="small muted">EPUB или FB2 — книга откроется в читалке «Полки», место чтения перейдёт на другие устройства.</p>}
+          {remote && (
+            <p className="small muted">
+              Файл «{remote.name || remote.format.toUpperCase()}» ({fileSize(remote.size)}) — на другом устройстве.{' '}
+              {remote.skipped ? (
+                <>
+                  Он убран с этого устройства.{' '}
+                  <button
+                    type="button"
+                    className="link-btn small"
+                    onClick={async () => {
+                      try {
+                        await api.bookUnskip(remote.hash);
+                        onForget();
+                        nav.toast(library.filesSync ? 'Файл придёт при следующем обмене' : 'Файл придёт, когда включите «Файлы книг на всех устройствах» в настройках');
+                      } catch (e) {
+                        nav.toast(message(e));
+                      }
+                    }}
+                  >
+                    Вернуть
+                  </button>
+                </>
+              ) : library.filesSync ? (
+                'Придёт сюда при следующем обмене по Wi-Fi или через облако.'
+              ) : (
+                'Чтобы он пришёл сюда, включите «Файлы книг на всех устройствах» в настройках — здесь и там, где файл.'
+              )}
+            </p>
+          )}
+          {!bookFile && !remote && <p className="small muted">EPUB, FB2 или PDF — книга откроется в читалке «Полки», место чтения перейдёт на другие устройства.</p>}
           <input
             ref={bookInput}
             type="file"
@@ -476,7 +507,7 @@ export default function Card({ t, titles, nav, wide, library, onForget }: { t: T
                   try {
                     await api.bookForget(bookFile.hash);
                     onForget();
-                    nav.toast('Файл книги убран с этого устройства; место чтения сохранилось');
+                    nav.toast('Файл книги убран с этого устройства (на других он остался); место чтения сохранилось');
                   } catch (e) {
                     nav.toast(message(e));
                   }

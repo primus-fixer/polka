@@ -3,6 +3,7 @@ import type { Library, Nav } from '../App';
 import { api, message, type Title, type YearStats } from '../api';
 import { daysLeftInYear, decimal, MONTH_LETTERS, plural, thousands, todayIso, yearOf } from '../format';
 import { Bar, Cover, Icon } from '../ui';
+import { bookHours, comparisons } from '../fun';
 import { kindLabel } from './Home';
 import YearPicture from './YearPicture';
 
@@ -39,6 +40,8 @@ export default function Stats({ titles, nav, library }: { titles: Title[]; nav: 
   if (readMinutes > 0) figures.splice(1, 0, ['Часов в читалке', readMinutes < 600 ? decimal(Math.round(readMinutes / 6) / 10) : String(Math.round(readMinutes / 60))]);
   if (s.dropped) figures.push(['Брошено', String(s.dropped)]);
   const best = s.best.map((id) => titles.find((t) => t.id === id)).filter((t): t is Title => !!t);
+  // Забавные сравнения: часы за книгами и у экрана — в понятных мерах.
+  const fun = comparisons(bookHours(s.pages, s.audio_minutes, readMinutes), s.screen_minutes / 60, year);
   const genreMax = Math.max(1, ...s.genres.map((g) => g.n));
 
   return (
@@ -80,6 +83,18 @@ export default function Stats({ titles, nav, library }: { titles: Title[]; nav: 
           </div>
         ))}
       </div>
+
+      {fun.length > 0 && (
+        <section className="stack-s fun">
+          <h2 className="sec">Если сравнить</h2>
+          <ul>
+            {fun.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p className="small muted3">Часы за книгами — по полторы минуты на страницу; у экрана — по длительности фильмов и серий.</p>
+        </section>
+      )}
 
       <section>
         <div className="sec-head">

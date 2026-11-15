@@ -2264,6 +2264,71 @@ p {
   stroke: var(--rd-link);
 }
 
+/* ——— PDF: страницы рисует pdf.js; тема — фильтром поверх нарисованной страницы ——— */
+.pdf-reader {
+  --rd-side: 14px;
+}
+
+.pdf-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* pdf.js требует, чтобы прокручиваемый блок был позиционирован абсолютно. */
+.pdf-box {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  background: color-mix(in srgb, var(--rd-ink) 7%, var(--rd-bg));
+}
+
+.pdf-reader .pdfViewer {
+  padding: 10px 0 24px;
+}
+
+.pdf-reader .pdfViewer.removePageBorders .page {
+  margin: 0 auto 12px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.16);
+}
+
+.pdf-reader.theme-sepia .pdfViewer .page canvas {
+  filter: sepia(0.32) saturate(1.15) brightness(0.97);
+}
+
+.pdf-reader.theme-dark .pdfViewer {
+  --page-bg-color: #1f1f1e;
+}
+
+.pdf-reader.theme-dark .pdfViewer .page canvas {
+  filter: invert(0.88) hue-rotate(180deg);
+}
+
+/* Текст PDF прозрачен поверх нарисованной страницы: подсветка должна просвечивать. */
+.pdf-reader ::highlight(polka-hit) {
+  background-color: color-mix(in srgb, var(--rd-hit) 55%, transparent);
+}
+
+.pdf-reader ::highlight(polka-quote) {
+  background-color: color-mix(in srgb, var(--rd-hit) 35%, transparent);
+}
+
+.pdf-reader .textLayer ::selection {
+  background: color-mix(in srgb, var(--rd-link) 35%, transparent);
+}
+
+.pdf-reader .rd-toc button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pdf-goto input {
+  max-width: 11em;
+}
+
 ::highlight(polka-quote) {
   background-color: color-mix(in srgb, var(--rd-hit) 50%, transparent);
   color: inherit;
@@ -2380,4 +2445,234 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* ——— Вход: PIN-код, отпечаток, Windows Hello (как в «Кармане») ——— */
+.lock {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+}
+
+.lockname {
+  margin: 0 0 4px;
+  font-family: var(--num);
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 46px;
+  letter-spacing: -0.015em;
+}
+
+.lockname.small-name {
+  font-size: 26px;
+  line-height: 32px;
+}
+
+.lock-hint {
+  min-height: 42px;
+  max-width: 300px;
+  margin: 0;
+  text-align: center;
+  font-size: 15px;
+}
+
+.lock-note {
+  max-width: 300px;
+  margin: -10px 0 0;
+  text-align: center;
+}
+
+.lock-forgot {
+  color: var(--own);
+  font-weight: 500;
+}
+
+.lockclose {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+}
+
+.pindots {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 28px;
+  margin-bottom: 8px;
+}
+
+.pindots i {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ink3);
+  border-radius: 50%;
+}
+
+.pindots i.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.pindots.shake {
+  animation: pinshake 0.35s;
+}
+
+@keyframes pinshake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-9px);
+  }
+  40%,
+  80% {
+    transform: translateX(9px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pindots.shake {
+    animation: none;
+  }
+}
+
+.pinpad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(300px, 100%);
+}
+
+.pinpad button {
+  display: grid;
+  place-items: center;
+  height: 60px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--inset);
+  color: var(--ink);
+  font-family: var(--num);
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.pinpad button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pinpad .padextra {
+  background: none;
+  color: var(--own);
+}
+
+@media (max-height: 640px) {
+  .pinpad button {
+    height: 50px;
+  }
+  .lockname {
+    font-size: 32px;
+    line-height: 38px;
+  }
+}
+
+.sec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* «Итоги»: забавные сравнения. */
+.fun ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fun li {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--inset);
+  line-height: 1.45;
+}
+
+/* Настройки → Claude: коннектор для приложения Claude. */
+.cloud-check.sub {
+  padding-left: 30px;
+}
+
+.claude-examples {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.link-btn.fold {
+  align-self: flex-start;
+}
+
+.code-box {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--inset);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.claude-action {
+  align-items: flex-start;
+}
+
+.claude-action .link-btn {
+  flex: none;
+}
+
+.struck {
+  text-decoration: line-through;
+}
+
+/* Сообщение о действии Claude — с кнопкой «Вернуть». */
+.toast.with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast.with-action > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toast .toast-btn {
+  flex: none;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

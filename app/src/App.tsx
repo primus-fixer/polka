@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, message, type Goal, type Imported, type LocalBook, type Reading, type Title } from './api';
+import { api, LOCKED, message, type ClaudeEvent, type Goal, type Imported, type LocalBook, type LockStatus, type Reading, type RemoteBook, type Title } from './api';
 import { todayIso, yearOf } from './format';
 import { applyTheme, type ThemeMode } from './theme';
 import { takeBook, takeOpened, takeShared } from './share';
 import { pushWidget } from './widget';
 import { store, stored } from './storage';
 import { Icon } from './ui';
+import { LockScreen, PinFlow, type PinMode } from './Lock';
 import Add from './screens/Add';
 import Card from './screens/Card';
 import Home, { readSort, type ShelfSort } from './screens/Home';
@@ -15,6 +16,7 @@ import Want from './screens/Want';
 
 // Читалка — отдельным куском: её код и шрифт грузятся, только когда открывают книгу.
 const Reader = lazy(() => import('./screens/Reader'));
+const PdfReader = lazy(() => import('./screens/PdfReader'));
 /** Открыть книгу сразу на месте (цитата из карточки): глава, знак, длина подсветки. */
 export type ReaderAt = { chapter: number; offset: number; len: number };
 
@@ -25,7 +27,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'add'; replace?: string; shared?: string }
   | { name: 'card'; id: string }
-  | { name: 'reader'; hash: string; at?: ReaderAt };
+  | { name: 'reader'; hash: string; at?: ReaderAt; pdf?: boolean };
 
 export type Filter = 'all' | 'book' | 'screen';
 
@@ -44,8 +46,8 @@ export type Nav = {
   importBook: (file: File, title?: string) => void;
 };
 
-/** Файлы книг на этом устройстве и места чтения (с этого и других устройств). */
-export type Library = { files: LocalBook[]; readings: Reading[] };
+/** Файлы книг здесь и на других устройствах, места чтения; `filesSync` — включён ли обмен файлами. */
+export type Library = { files: LocalBook[]; readings: Reading[]; elsewhere: RemoteBook[]; filesSync: boolean };
 
 const TABS: { id: 'home' | 'want' | 'stats' | 'settings'; label: string; icon: string }[] = [
   { id: 'home', label: 'Полка', icon: 'shelf' },
@@ -71,7 +73,34 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [history, setHistory] = useState<Route[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, showToast] = useState<string | null>(null);
+  // Claude записал что-то через коннектор: сообщение с кнопкой «Вернуть».
+  const [claudeNote, setClaudeNote] = useState<ClaudeEvent | null>(null);
+  // Вход по PIN-коду: состояние, экран входа поверх всего, экраны «задать/сменить PIN».
+  const [lock, setLock] = useState<LockStatus | null>(null);
+  const [locked, setLocked] = useState(false);
+  const lockedRef = useRef(false);
+  const [lockKey, setLockKey] = useState(0);
+  const [pinFlow, setPinFlow] = useState<PinMode | null>(null);
+  /** Экран входа — только если его ещё нет на экране (он сам спросит отпечаток). */
+  const showLock = useCallback(() => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    setLockKey((k) => k + 1);
+    setLocked(true);
+  }, []);
+  /** «Полка» заблокирована: экран входа с актуальным состоянием. */
+  const goLocked = useCallback(() => {
+    api.lockStatus().then(
+      (st) => {
+        setLock(st);
+        if (st.locked) showLock();
+      },
+      () => showLock(),
+    );
+  }, [showLock]);
+  // Ответ «locked» от любой команды — не сообщение, а экран входа.
+  const setToast = useCallback((text: string | null) => (text === LOCKED ? goLocked() : showToast(text)), [goLocked]);
   const [view, setView] = useState<'shelf' | 'feed'>(() => (stored('polka.view', 'shelf') === 'feed' ? 'feed' : 'shelf'));
   const [filter, setFilter] = useState<Filter>('all');
   // Поиск по полке: null — поле убрано. Не запоминается между запусками.
@@ -81,7 +110,12 @@ export default function App() {
   const [scheme, setScheme] = useState(() => stored('polka.scheme', 'shield'));
   const [mode, setMode] = useState<ThemeMode>(() => stored('polka.mode', 'system') as ThemeMode);
   const [goal, setGoal] = useState<Goal>({});
-  const [library, setLibrary] = useState<Library>({ files: [], readings: [] });
+  const [library, setLibrary] = useState<Library>({ files: [], readings: [], elsewhere: [], filesSync: false });
+  const libraryRef = useRef(library);
+  libraryRef.current = library;
+  const loadedRef = useRef(loaded);
+  loadedRef.current = loaded;
+  const checkRef = useRef<() => void>(() => undefined);
   const wide = useWide();
   const year = yearOf(todayIso());
 
@@ -102,8 +136,8 @@ export default function App() {
   }, [year]);
 
   const loadLibrary = useCallback(() => {
-    Promise.all([api.bookFiles(), api.readings()])
-      .then(([files, readings]) => setLibrary({ files, readings }))
+    Promise.all([api.bookFiles(), api.readings(), api.bookElsewhere().catch(() => []), api.filesSettings().catch(() => null)])
+      .then(([files, readings, elsewhere, fs]) => setLibrary({ files, readings, elsewhere, filesSync: !!fs?.sync }))
       .catch(() => undefined);
   }, []);
 
@@ -113,7 +147,7 @@ export default function App() {
     loadLibrary();
   }, [loadGoal, loadLibrary]);
 
-  useEffect(() => {
+  const start = useCallback(() => {
     // Смещение местного времени — для имён резервных копий.
     api.setTz(-new Date().getTimezoneOffset()).catch(() => undefined);
     api
@@ -123,7 +157,38 @@ export default function App() {
       .finally(() => setLoaded(true));
     loadGoal();
     loadLibrary();
-  }, [loadGoal, loadLibrary]);
+  }, [loadGoal, loadLibrary, setToast]);
+  const startRef = useRef(start);
+  startRef.current = start;
+
+  // Сначала — вход: с PIN-кодом данные приходят только после него.
+  useEffect(() => {
+    api.lockStatus().then(
+      (st) => {
+        setLock(st);
+        if (st.locked) showLock();
+        else startRef.current();
+      },
+      () => startRef.current(),
+    );
+    // Свернули — «Полка» считает время в фоне; вернулись через 5 минут — экран входа.
+    const onVisible = () => {
+      const visible = document.visibilityState === 'visible';
+      api.appVisible(visible).then(
+        (st) => {
+          setLock(st);
+          if (st.locked && visible) goLocked();
+        },
+        () => undefined,
+      );
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const unlisten = api.onLocked(goLocked).catch(() => () => undefined);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      unlisten.then((f) => f());
+    };
+  }, [showLock, goLocked]);
 
   // Книга пришла (файл выбрали, перетащили или открыли «С помощью…»): на полку и сразу читать.
   const routeRef = useRef(route);
@@ -134,7 +199,7 @@ export default function App() {
       loadLibrary();
       setToast(r.created ? `«${r.title.title}» — теперь на полке, в «Читаю»` : null);
       setHistory((h) => [...h.slice(-20), routeRef.current]);
-      setRoute({ name: 'reader', hash: r.hash });
+      setRoute({ name: 'reader', hash: r.hash, pdf: r.format === 'pdf' });
     },
     [loadLibrary],
   );
@@ -159,10 +224,31 @@ export default function App() {
     };
   }, [reload]);
 
+  // Коннектор для приложения Claude: Claude что-то записал — перечитать полку и показать, что именно.
+  useEffect(() => {
+    const off = api
+      .onClaude((e) => {
+        reload();
+        setClaudeNote(e);
+      })
+      .catch(() => () => undefined);
+    return () => {
+      off.then((f) => f());
+    };
+  }, [reload]);
+
+  useEffect(() => {
+    if (!claudeNote) return;
+    const id = window.setTimeout(() => setClaudeNote(null), 12000);
+    return () => window.clearTimeout(id);
+  }, [claudeNote]);
+
   // «Поделиться» → «Полка» на Android: текст со ссылкой открывает добавление.
   useEffect(() => {
     if (!loaded) return;
     const check = () => {
+      // Пока «Полка» заблокирована, присланное ждёт входа.
+      if (lockedRef.current) return;
       // Из виджета «Сейчас»: открыть запись (или просто «Полку»).
       const open = takeOpened();
       if (open) {
@@ -184,6 +270,7 @@ export default function App() {
       setRoute({ name: 'add', shared: text });
     };
     check();
+    checkRef.current = check;
     const onVisible = () => document.visibilityState === 'visible' && check();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', check);
@@ -193,7 +280,47 @@ export default function App() {
       window.removeEventListener('focus', check);
       window.removeEventListener('polka-book', check);
     };
-  }, [loaded]);
+  }, [loaded, setToast]);
+
+  const onUnlocked = useCallback(
+    (st: LockStatus) => {
+      setLock(st);
+      lockedRef.current = false;
+      setLocked(false);
+      if (loadedRef.current) reload();
+      else startRef.current();
+      // Присланное, пока «Полка» была заблокирована.
+      checkRef.current();
+      if (st.recovery) setPinFlow('reset');
+    },
+    [reload],
+  );
+  const security = useMemo(
+    () => ({
+      lock,
+      onPin: (m: PinMode) => setPinFlow(m),
+      onBio: (on: boolean) => {
+        api
+          .bioSet(on)
+          .then((st) => {
+            setLock(st);
+            if (st.error) setToast(st.error);
+            else setToast(on ? 'Вход по отпечатку включён' : 'Вход по отпечатку выключен');
+          })
+          .catch((e) => setToast(message(e)));
+      },
+      onLockNow: () => {
+        api
+          .lockNow()
+          .then((st) => {
+            setLock(st);
+            if (st.locked) showLock();
+          })
+          .catch((e) => setToast(message(e)));
+      },
+    }),
+    [lock, setToast, showLock],
+  );
 
   // Виджет «Сейчас» на главном экране Android — после изменений полки.
   useEffect(() => {
@@ -204,7 +331,7 @@ export default function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), 4500);
+    const id = window.setTimeout(() => showToast(null), 4500);
     return () => window.clearTimeout(id);
   }, [toast]);
 
@@ -225,7 +352,7 @@ export default function App() {
       toast: setToast,
       read: (hash, at) => {
         setHistory([...history.slice(-20), route]);
-        setRoute({ name: 'reader', hash, at });
+        setRoute({ name: 'reader', hash, at, pdf: libraryRef.current.files.some((f) => f.hash === hash && f.format === 'pdf') });
       },
       importBook: (file, title) => {
         setToast(`Открываю «${file.name}»…`);
@@ -244,11 +371,53 @@ export default function App() {
     document.querySelector('.main')?.scrollTo(0, 0);
   };
 
+  const overlays = (
+    <>
+      {locked && lock && <LockScreen key={lockKey} status={lock} onUnlocked={onUnlocked} />}
+      {pinFlow && !locked && (
+        <PinFlow
+          mode={pinFlow}
+          onClose={() => setPinFlow(null)}
+          onDone={(st, text) => {
+            setLock(st);
+            setPinFlow(null);
+            showToast(text);
+          }}
+        />
+      )}
+    </>
+  );
+
+  const undoClaude = (id: number) => {
+    setClaudeNote(null);
+    api
+      .claudeUndo(id)
+      .then(() => {
+        reload();
+        setToast('Отменено');
+      })
+      .catch((e) => setToast(message(e)));
+  };
+  const toastView = claudeNote ? (
+    <div className="toast with-action" role="status">
+      <span>{claudeNote.text}</span>
+      <button type="button" className="toast-btn" onClick={() => undoClaude(claudeNote.id)}>
+        Вернуть
+      </button>
+    </div>
+  ) : toast ? (
+    <div className="toast" role="status" onClick={() => showToast(null)}>
+      {toast}
+    </div>
+  ) : null;
+
   if (route.name === 'reader') {
+    const BookReader = route.pdf ? PdfReader : Reader;
     return (
       <>
+        {overlays}
         <Suspense fallback={<div className="rd-wait">Открываю книгу…</div>}>
-          <Reader
+          <BookReader
             key={`${route.hash}-${route.at?.chapter ?? ''}-${route.at?.offset ?? ''}`}
             hash={route.hash}
             at={route.at}
@@ -261,11 +430,7 @@ export default function App() {
             }}
           />
         </Suspense>
-        {toast && (
-          <div className="toast" role="status" onClick={() => setToast(null)}>
-            {toast}
-          </div>
-        )}
+        {toastView}
       </>
     );
   }
@@ -283,7 +448,7 @@ export default function App() {
   else if (route.name === 'want') body = <Want titles={titles} nav={nav} filter={filter} setFilter={setFilter} />;
   else if (route.name === 'stats') body = <Stats titles={titles} nav={nav} library={library} />;
   else if (route.name === 'settings')
-    body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} onSynced={reload} nav={nav} />;
+    body = <Settings scheme={scheme} setScheme={setScheme} mode={mode} setMode={setMode} goal={goal} year={year} onGoal={loadGoal} onSynced={reload} nav={nav} security={security} />;
   else if (route.name === 'add') body = <Add key={route.shared ?? 'add'} titles={titles} nav={nav} replace={titles.find((t) => t.id === route.replace)} shared={route.shared} />;
   else {
     const t = titles.find((x) => x.id === route.id);
@@ -325,11 +490,8 @@ export default function App() {
           ))}
         </nav>
       )}
-      {toast && (
-        <div className="toast" role="status" onClick={() => setToast(null)}>
-          {toast}
-        </div>
-      )}
+      {toastView}
+      {overlays}
     </div>
   );
 }

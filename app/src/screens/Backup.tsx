@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Nav } from '../App';
 import { api, inApp, isMobileApp, message, type BackupEvery, type BackupInfo, type BackupStatus } from '../api';
-import { NB, plural } from '../format';
+import { NB, count } from '../format';
 import { Bar, Icon, Seg } from '../ui';
 
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -34,7 +34,6 @@ export function sharedLast(v: string | null): { at: number; device: string } | n
   return Number.isFinite(at) && at > 0 ? { at, device: i < 0 ? '' : v.slice(i + 1) } : null;
 }
 
-const count = (n: number, one: string, few: string, many: string) => `${n.toLocaleString('ru-RU')}${NB}${plural(n, one, few, many)}`;
 
 const EVERY: [BackupEvery, string][] = [
   ['day', 'Каждый день'],
@@ -108,8 +107,9 @@ function Restore({ first, nav, pick, onClose }: { first: File; nav: Nav; pick: (
       const parts: string[] = [];
       if (r.titles) parts.push(count(r.titles, 'запись', 'записи', 'записей'));
       if (r.blobs) parts.push(count(r.blobs, 'обложка', 'обложки', 'обложек'));
+      if (r.books) parts.push(count(r.books, 'файл книги', 'файла книг', 'файлов книг'));
       nav.toast(
-        r.events === 0 && r.blobs === 0
+        r.events === 0 && r.blobs === 0 && !r.books
           ? 'Всё из копии уже было на устройстве'
           : 'Восстановлено: ' + (parts.length ? parts.join(', ') : count(r.events, 'изменение', 'изменения', 'изменений')),
       );
@@ -164,7 +164,7 @@ function Restore({ first, nav, pick, onClose }: { first: File; nav: Nav; pick: (
               {info.device ? `, «${info.device}»` : ''}
             </span>
             <span className="small muted">
-              {[count(info.titles, 'запись', 'записи', 'записей'), count(info.blobs, 'обложка', 'обложки', 'обложек'), bytesText(info.bytes)].join(' · ')}
+              {[count(info.titles, 'запись', 'записи', 'записей'), count(info.blobs, 'обложка', 'обложки', 'обложек'), ...(info.books ? [count(info.books, 'файл книги', 'файла книг', 'файлов книг')] : []), bytesText(info.bytes)].join(' · ')}
               {info.app ? ` · «Полка» ${info.app}` : ''}
             </span>
           </div>

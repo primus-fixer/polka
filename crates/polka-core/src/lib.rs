@@ -16,13 +16,17 @@ pub mod cloud;
 pub mod date;
 pub mod db;
 pub mod error;
+pub mod files;
 pub mod isbn;
 pub mod lan;
+pub mod mcp;
 pub mod model;
 pub mod pairing;
+pub mod pin;
 pub mod reader;
 pub mod stats;
 pub mod sync;
+pub mod tools;
 
 pub use date::Date;
 pub use error::{Error, Result};

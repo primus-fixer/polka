@@ -4,7 +4,10 @@ import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { SCHEMES, type ThemeMode } from '../theme';
 import { Seg } from '../ui';
 import BackupSection from './Backup';
+import BookFilesSection from './BookFiles';
+import ClaudeSection from './Claude';
 import CloudSection from './Cloud';
+import SecuritySection, { type Security } from './Security';
 import WifiSection from './Wifi';
 
 type Props = {
@@ -18,6 +21,8 @@ type Props = {
   /** Пришли записи с другого устройства — перечитать полку. */
   onSynced: () => void;
   nav: Nav;
+  /** Вход по PIN-коду и отпечатку. */
+  security: Security;
 };
 
 const METHOD: Record<string, string> = {
@@ -27,7 +32,7 @@ const METHOD: Record<string, string> = {
   demo: 'демо в браузере: данные не сохраняются',
 };
 
-export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav }: Props) {
+export default function Settings({ scheme, setScheme, mode, setMode, goal, year, onGoal, onSynced, nav, security }: Props) {
   const [info, setInfo] = useState<S | null>(null);
   const [books, setBooks] = useState(goal.books ? String(goal.books) : '');
   const [screen, setScreen] = useState(goal.screen ? String(goal.screen) : '');
@@ -166,11 +171,17 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         <p className="small muted">Ключи хранятся только на этом устройстве, в зашифрованном виде.</p>
       </section>
 
+      <ClaudeSection nav={nav} onChange={onSynced} />
+
       <WifiSection onSynced={onSynced} />
 
       <CloudSection />
 
+      <BookFilesSection nav={nav} onChange={onSynced} />
+
       <BackupSection nav={nav} />
+
+      <SecuritySection sec={security} />
 
       <section className="stack-s">
         <h2 className="sec">Данные</h2>
@@ -180,7 +191,7 @@ export default function Settings({ scheme, setScheme, mode, setMode, goal, year,
         {!inApp && <p className="small warn-text">Это демо в браузере: изменения пропадут после перезагрузки.</p>}
       </section>
 
-      <p className="small muted3">Полка 0.6.0</p>
+      <p className="small muted3">Полка {__APP_VERSION__}</p>
     </div>
   );
 }

@@ -5,9 +5,13 @@
 //! события и потом — недостающие снимки обложек (по номерам из записей). Повторы пропускаются,
 //! при споре побеждает более позднее изменение (это делает база).
 //!
+//! С 0.8.0 после обложек — файлы книг (если обмен ими включён на обоих устройствах): каждая сторона
+//! забирает у другой недостающие файлы кусками, с докачкой (см. [`crate::files`]).
+//!
 //! Канал ([`Wire`]) шифрует каждое сообщение; ключи и порядок пакетов — в [`crate::lan`].
 
 use crate::db::{Event, Store};
+use crate::files::{self, BookFile};
 use crate::error::{Error, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -33,6 +37,10 @@ const HELLO_WAIT: Duration = Duration::from_secs(15);
 const FILES_PER_PACKET: usize = 24 * 1024 * 1024;
 /// Больше кругов обмена обложками за одно подключение не делаем.
 const MAX_ROUNDS: usize = 50;
+/// Файлов книг за одно подключение — не больше (остальные — в следующий раз).
+const MAX_FILES: usize = 100;
+/// Кусков файлов за одно подключение — с запасом на 100 файлов по 100 МБ.
+const MAX_PARTS: usize = MAX_FILES * 14 + 16;
 
 /// Сообщения обмена.
 #[derive(Serialize, Deserialize)]
@@ -47,6 +55,14 @@ pub(crate) enum Msg {
     Want { ids: Vec<String> },
     /// Обложки по запросу и свой список недостающих.
     Give { blobs: Vec<Blob>, want: Vec<String> },
+    /// Файлы книг (с 0.8.0): готово ли устройство отдавать свои.
+    Files { give: bool },
+    /// Кусок файла книги с места `offset`.
+    Pull { id: String, offset: u64 },
+    /// Кусок файла книги: `total` — размер файла (0 — такого файла нет), данные — base64.
+    Part { id: String, offset: u64, total: u64, data: String },
+    /// Больше кусков не нужно.
+    FilesDone,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -71,6 +87,76 @@ pub struct SyncReport {
     pub files_received: usize,
     /// Версия «Полки» на другом устройстве.
     pub peer_app: String,
+    /// Сколько файлов книг ушло и пришло целиком.
+    #[serde(default)]
+    pub books_sent: usize,
+    #[serde(default)]
+    pub books_received: usize,
+}
+
+/// Файлы книг по Wi-Fi — с 0.8.0: со старой «Полкой» эту часть обмена пропускаем.
+pub(crate) fn speaks_files(app: &str) -> bool {
+    let mut it = app.split('.').map(|p| p.trim().parse::<u32>().unwrap_or(0));
+    let (major, minor) = (it.next().unwrap_or(0), it.next().unwrap_or(0));
+    major > 0 || minor >= 8
+}
+
+/// Забрать у другой стороны недостающие файлы — кусками, с докачкой. Возвращает, сколько пришло целиком.
+fn pull_files(w: &mut impl Wire, store: &Mutex<Store>, list: &[BookFile]) -> Result<usize> {
+    let mut got = 0;
+    for f in list.iter().take(MAX_FILES) {
+        let mut offset = files::partial(&lock(store), &f.id);
+        if offset >= f.size {
+            offset = 0;
+        }
+        loop {
+            w.send(&Msg::Pull { id: f.id.clone(), offset })?;
+            let (id, at, total, data) = match w.recv()? {
+                Msg::Part { id, offset, total, data } => (id, offset, total, data),
+                _ => return Err(unexpected()),
+            };
+            if id != f.id || at != offset || total == 0 {
+                break;
+            }
+            let Ok(bytes) = B64.decode(data.as_bytes()) else { break };
+            match files::write_part(&lock(store), f, offset, total, &bytes) {
+                Ok(true) => {
+                    got += 1;
+                    break;
+                }
+                Ok(false) => offset += bytes.len() as u64,
+                // Испорченный или не тот файл — в другой раз.
+                Err(_) => break,
+            }
+        }
+    }
+    Ok(got)
+}
+
+/// Отдавать куски по запросам другой стороны, пока она не скажет «хватит».
+/// Возвращает, сколько файлов отдано целиком.
+fn serve_files(w: &mut impl Wire, store: &Mutex<Store>, give: bool) -> Result<usize> {
+    let known: std::collections::BTreeSet<String> = if give { files::present(&lock(store))?.into_iter().map(|f| f.id).collect() } else { Default::default() };
+    let mut sent = 0;
+    for _ in 0..MAX_PARTS {
+        match w.recv()? {
+            Msg::Pull { id, offset } => {
+                let part = if known.contains(&id) { files::read_part(&lock(store), &id, offset)? } else { None };
+                match part {
+                    Some((total, data)) if !data.is_empty() => {
+                        if offset + data.len() as u64 >= total {
+                            sent += 1;
+                        }
+                        w.send(&Msg::Part { id, offset, total, data: B64.encode(&data) })?;
+                    }
+                    _ => w.send(&Msg::Part { id, offset, total: 0, data: String::new() })?,
+                }
+            }
+            Msg::FilesDone => return Ok(sent),
+            _ => return Err(unexpected()),
+        }
+    }
+    Err(unexpected())
 }
 
 /// Канал обмена: зашифрованные сообщения поверх TCP.
@@ -182,8 +268,23 @@ pub(crate) fn run_client(w: &mut impl Wire, store: &Mutex<Store>, name: &str, ex
             break;
         }
     }
+    // Файлы книг: сначала забираем свои недостающие, потом отдаём то, что нужно другой стороне.
+    let (mut books_sent, mut books_received) = (0, 0);
+    if speaks_files(&peer_app) && files::sync_on(&lock(store)) {
+        let mine = files::wanted(&lock(store))?;
+        w.send(&Msg::Files { give: true })?;
+        let they_give = match w.recv()? {
+            Msg::Files { give } => give,
+            _ => return Err(unexpected()),
+        };
+        if they_give {
+            books_received = pull_files(w, store, &mine)?;
+        }
+        w.send(&Msg::FilesDone)?;
+        books_sent = serve_files(w, store, true)?;
+    }
     w.send(&Msg::Done { applied: 0 })?;
-    Ok(SyncReport { peer, peer_name, sent, received, files_sent, files_received, peer_app })
+    Ok(SyncReport { peer, peer_name, sent, received, files_sent, files_received, peer_app, books_sent, books_received })
 }
 
 /// Обмен со стороны ждущего. `expect` — какое устройство должно прийти
@@ -213,8 +314,19 @@ pub(crate) fn run_server(w: &mut impl Wire, store: &Mutex<Store>, name: &str, ex
     let received = lock(store).apply_remote(&incoming)?;
     w.send(&Msg::Done { applied: received })?;
     let (mut files_sent, mut files_received) = (0, 0);
+    let (mut books_sent, mut books_received) = (0, 0);
     for _ in 0..MAX_ROUNDS {
         match w.recv()? {
+            Msg::Files { give: they_give } => {
+                let on = files::sync_on(&lock(store));
+                let mine = if on { files::wanted(&lock(store))? } else { Vec::new() };
+                w.send(&Msg::Files { give: on })?;
+                books_sent += serve_files(w, store, on)?;
+                if on && they_give {
+                    books_received += pull_files(w, store, &mine)?;
+                }
+                w.send(&Msg::FilesDone)?;
+            }
             Msg::Want { ids } => {
                 let (blobs, _) = collect_blobs(store, &ids)?;
                 files_sent += blobs.len();
@@ -232,5 +344,5 @@ pub(crate) fn run_server(w: &mut impl Wire, store: &Mutex<Store>, name: &str, ex
             _ => return Err(unexpected()),
         }
     }
-    Ok(SyncReport { peer, peer_name, sent, received, files_sent, files_received, peer_app })
+    Ok(SyncReport { peer, peer_name, sent, received, files_sent, files_received, peer_app, books_sent, books_received })
 }

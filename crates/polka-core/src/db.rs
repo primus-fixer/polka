@@ -35,6 +35,8 @@ pub struct Event {
 pub struct Store {
     conn: Connection,
     device: String,
+    /// Папка файлов книг этого устройства (её задаёт приложение; без неё файлы книг не переносятся).
+    books: Option<std::path::PathBuf>,
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -94,11 +96,20 @@ impl Store {
                id TEXT PRIMARY KEY, mime TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL,
                added INTEGER NOT NULL);",
         )?;
-        let store = Store { conn, device: device.to_string() };
+        let store = Store { conn, device: device.to_string(), books: None };
         if store.meta("schema")?.is_none() {
             store.set_meta("schema", "1")?;
         }
         Ok(store)
+    }
+
+    /// Где лежат файлы книг этого устройства.
+    pub fn set_books_dir(&mut self, dir: std::path::PathBuf) {
+        self.books = Some(dir);
+    }
+
+    pub fn books_dir(&self) -> Option<&Path> {
+        self.books.as_deref()
     }
 
     pub fn device(&self) -> &str {

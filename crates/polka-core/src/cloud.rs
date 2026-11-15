@@ -9,6 +9,9 @@
 //!   переименованный или подменённый файл не расшифруется.
 //! - `b/<имя>.pbl` — обложка. Имя — MAC от отпечатка снимка: по имени нельзя проверить,
 //!   лежит ли в облаке известная обложка.
+//! - `k/<имя>-<кусок>-<всего>.pbk` — файл книги кусками по 8 МБ (с 0.8.0, если на устройстве включён
+//!   обмен файлами книг). Имя — MAC от отпечатка файла; номер куска и их число входят в проверку
+//!   подлинности. Файл забирается, когда в облаке лежат все его куски, и сверяется с отпечатком.
 //!
 //! Общего состояния у устройств нет: по именам файлов видно, какие события есть в облаке.
 //! Устройство забирает файлы, которые продолжают его журнал без пропусков, и отправляет то,
@@ -17,6 +20,7 @@
 
 use crate::backup::{self, Kdf};
 use crate::db::{self, Event, Store};
+use crate::files::{self, BookFile};
 use crate::error::{CloudFail, Error, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -37,8 +41,10 @@ const FILE_MAGIC: &[u8; 4] = b"PLKC";
 const FILE_VERSION: u8 = 1;
 const KIND_EVENTS: u8 = b'e';
 const KIND_BLOB: u8 = b'b';
+const KIND_BOOK: u8 = b'k';
 const EVENTS_EXT: &str = ".pev";
 const BLOB_EXT: &str = ".pbl";
+const BOOK_EXT: &str = ".pbk";
 /// Магия, версия, вид, nonce и метка подлинности.
 const OVERHEAD: usize = 4 + 1 + 1 + 24 + 16;
 /// Событий в одном файле.
@@ -51,6 +57,8 @@ const MAX_PLAIN: usize = 256 << 20;
 /// Предел файла обложки: снимок и немного на заголовок.
 pub const MAX_BLOB_FILE: usize = db::MAX_BLOB + 1024;
 pub const MAX_KEY_FILE: usize = 64 << 10;
+/// Предел куска файла книги в облаке.
+pub const MAX_BOOK_FILE: usize = files::PART + OVERHEAD + 64;
 /// Полный список обложек в облаке сверяем не чаще раза в сутки, если нет новых.
 const BLOBS_RELIST: i64 = 24 * 3600;
 
@@ -98,6 +106,8 @@ pub enum Dir {
     Root,
     Events,
     Blobs,
+    /// Файлы книг (с 0.8.0).
+    Books,
 }
 
 impl Dir {
@@ -107,6 +117,7 @@ impl Dir {
             Dir::Root => "",
             Dir::Events => "e",
             Dir::Blobs => "b",
+            Dir::Books => "k",
         }
     }
 }
@@ -281,6 +292,25 @@ impl CloudKey {
         backup::wipe(&mut k);
         format!("{}{BLOB_EXT}", &hex(&name)[..32])
     }
+
+    /// Имя куска файла книги в облаке: по нему не узнать отпечаток файла.
+    pub fn book_name(&self, id: &str, part: u64, parts: u64) -> String {
+        let mut k = self.sub("books");
+        let name = mac256(&k, id.as_bytes());
+        backup::wipe(&mut k);
+        format!("{}-{part}-{parts}{BOOK_EXT}", &hex(&name)[..32])
+    }
+}
+
+fn hex32(s: &str) -> bool {
+    s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// Кусок файла книги: имя, номер куска, всего кусков.
+fn parse_book_name(name: &str) -> Option<(&str, u64, u64)> {
+    let mut it = name.strip_suffix(BOOK_EXT)?.split('-');
+    let (mac, part, parts) = (it.next()?, it.next()?.parse::<u64>().ok()?, it.next()?.parse::<u64>().ok()?);
+    (it.next().is_none() && hex32(mac) && part < parts && parts <= 64).then_some((mac, part, parts))
 }
 
 /// Файл ключа в облаке; `None` — его нет.
@@ -294,7 +324,8 @@ fn ours(dir: Dir, name: &str) -> bool {
     match dir {
         Dir::Root => name == KEY_FILE,
         Dir::Events => parse_event_name(name).is_some(),
-        Dir::Blobs => name.strip_suffix(BLOB_EXT).is_some_and(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))),
+        Dir::Blobs => name.strip_suffix(BLOB_EXT).is_some_and(hex32),
+        Dir::Books => parse_book_name(name).is_some(),
     }
 }
 
@@ -306,7 +337,7 @@ pub fn join(cloud: &dyn Cloud, password: &str, kdf: Kdf, now: i64) -> Result<(Cl
         return Ok((CloudKey::from_key_file(&kf, password)?, false));
     }
     // Без ключа старые файлы «Полки» не прочитать никому: убираем их, чтобы не мешали.
-    for dir in [Dir::Events, Dir::Blobs] {
+    for dir in [Dir::Events, Dir::Blobs, Dir::Books] {
         for e in cloud.list(dir)?.into_iter().filter(|e| ours(dir, &e.name)) {
             cloud.delete(dir, &e.name)?;
         }
@@ -338,7 +369,7 @@ pub fn put_key_file(cloud: &dyn Cloud, key: &CloudKey, kf: &KeyFile) -> Result<(
 pub fn wipe(cloud: &dyn Cloud, cancel: &AtomicBool) -> Result<usize> {
     cloud.delete(Dir::Root, KEY_FILE)?;
     let mut n = 1;
-    for dir in [Dir::Events, Dir::Blobs] {
+    for dir in [Dir::Events, Dir::Blobs, Dir::Books] {
         for e in cloud.list(dir)?.into_iter().filter(|e| ours(dir, &e.name)) {
             if cancel.load(Ordering::Relaxed) {
                 return Err(fail(CloudFail::Cancelled, "Удаление остановлено"));
@@ -520,6 +551,8 @@ pub enum Step {
     Events,
     Upload { done: usize, total: usize },
     Download { done: usize, total: usize },
+    /// Файлы книг: отправка и получение.
+    Books { done: usize, total: usize },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -533,6 +566,13 @@ pub struct Report {
     pub files_sent: usize,
     /// Обложек, которых в облаке пока нет: их ещё не отправило другое устройство.
     pub files_waiting: usize,
+    /// Файлов книг пришло и ушло; сколько ещё не лежит в облаке целиком.
+    #[serde(default)]
+    pub books_received: usize,
+    #[serde(default)]
+    pub books_sent: usize,
+    #[serde(default)]
+    pub books_waiting: usize,
     /// Что не получилось, но обмену не помешало.
     pub problems: Vec<String>,
 }
@@ -887,6 +927,77 @@ impl Round<'_> {
         }
         Ok(())
     }
+
+    /// Файлы книг: отправить те, которых в облаке нет целиком, и забрать нужные — когда в облаке
+    /// лежат все их куски. Недокачанный файл докачивается с того же куска в следующий раз.
+    fn books(&self, report: &mut Report, progress: &mut dyn FnMut(Step)) -> Result<()> {
+        let (present, wanted) = {
+            let st = lock(self.store);
+            if !files::sync_on(&st) {
+                return Ok(());
+            }
+            (files::present(&st)?, files::wanted(&st)?)
+        };
+        if present.is_empty() && wanted.is_empty() {
+            return Ok(());
+        }
+        self.check()?;
+        let names: BTreeSet<String> = self.cloud.list(Dir::Books)?.into_iter().map(|e| e.name).collect();
+        let parts_of = |f: &BookFile| -> Vec<String> { (0..f.parts()).map(|i| self.key.book_name(&f.id, i, f.parts())).collect() };
+        let up: Vec<(&BookFile, Vec<String>)> = present.iter().map(|f| (f, parts_of(f))).filter(|(_, p)| p.iter().any(|n| !names.contains(n))).collect();
+        let down: Vec<(&BookFile, Vec<String>)> = wanted.iter().map(|f| (f, parts_of(f))).filter(|(_, p)| p.iter().all(|n| names.contains(n))).collect();
+        report.books_waiting = wanted.len() - down.len();
+        let total = up.len() + down.len();
+        for (i, (f, parts)) in up.iter().enumerate() {
+            progress(Step::Books { done: i, total });
+            let mut whole = true;
+            for (k, name) in parts.iter().enumerate() {
+                if names.contains(name) {
+                    continue;
+                }
+                self.check()?;
+                let Some((_, data)) = files::read_part(&lock(self.store), &f.id, k as u64 * files::PART as u64)? else {
+                    whole = false;
+                    break;
+                };
+                let sealed = seal_file(self.key, KIND_BOOK, name, &data)?;
+                self.cloud.put(Dir::Books, name, &sealed)?;
+            }
+            if whole {
+                report.books_sent += 1;
+            }
+        }
+        for (i, (f, parts)) in down.iter().enumerate() {
+            progress(Step::Books { done: up.len() + i, total });
+            let have = files::partial(&lock(self.store), &f.id);
+            let start = if have < f.size && have.is_multiple_of(files::PART as u64) { have / files::PART as u64 } else { 0 };
+            for (k, name) in parts.iter().enumerate().skip(start as usize) {
+                self.check()?;
+                // Кусок пропал между списком и скачиванием — в другой раз.
+                let Some(data) = self.cloud.get(Dir::Books, name, MAX_BOOK_FILE)? else { break };
+                let plain = match open_file(self.key, KIND_BOOK, name, &data) {
+                    Ok(p) => p,
+                    Err(e @ Error::Cloud(CloudFail::Newer, _)) => return Err(e),
+                    Err(e) => {
+                        report.problems.push(format!("Файл книги «{}»: {e}", f.name));
+                        break;
+                    }
+                };
+                match files::write_part(&lock(self.store), f, k as u64 * files::PART as u64, f.size, &plain) {
+                    Ok(true) => {
+                        report.books_received += 1;
+                        break;
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        report.problems.push(format!("Файл книги «{}»: {e}", f.name));
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Обмен с облаком: забрать новое, отправить недостающее, слить мелкие файлы, обложки.
@@ -911,6 +1022,7 @@ pub fn sync(r: &Round, state: &mut State, progress: &mut dyn FnMut(Step)) -> Res
     let names: BTreeSet<String> = files.iter().flat_map(|(a, spans)| spans.iter().map(move |s| s.name(a))).collect();
     state.checked.retain(|n| names.contains(n));
     r.blobs(state, &mut report, progress)?;
+    r.books(&mut report, progress)?;
     state.synced = true;
     Ok(report)
 }
@@ -1065,6 +1177,65 @@ mod tests {
         assert!(!name.contains(&id[..16]), "по имени не узнать отпечаток обложки");
         assert_eq!(name, mk.blob_name(&id));
         assert_ne!(name, CloudKey::generate().unwrap().blob_name(&id), "у другого облака другие имена");
+    }
+
+    /// Файлы книг через облако: кусками, только где включён обмен файлами, с ожиданием недостающих кусков.
+    #[test]
+    fn book_files_go_through_the_cloud_in_parts() {
+        use crate::files::{BookFile, FILE, PART, SYNC_KEY};
+        use crate::reader::BookFormat;
+        let dir = tempfile::tempdir().unwrap();
+        let cloud = MemCloud::default();
+        let (key, _) = join(&cloud, PW, FAST, 1).unwrap();
+        let a = demo(dir.path(), "a.db", "aaaa");
+        let b = fresh(dir.path(), "b.db", "bbbb");
+        lock(&a).set_books_dir(dir.path().join("a-books"));
+        lock(&b).set_books_dir(dir.path().join("b-books"));
+        let data: Vec<u8> = b"%PDF-1.7\n".iter().copied().chain((0..(PART * 2 + 7)).map(|i| (i % 241) as u8)).collect();
+        let id = db::blob_id(&data);
+        {
+            let mut st = lock(&a);
+            let d = st.books_dir().unwrap().to_path_buf();
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join(format!("{id}.pdf")), &data).unwrap();
+            st.put(FILE, &id, &BookFile { id: id.clone(), title: "aaaa0".into(), name: "picnic.pdf".into(), format: BookFormat::Pdf, size: data.len() as u64, added: 1 }).unwrap();
+        }
+        let (mut sa, mut sb) = (State::default(), State::default());
+        // Обмен файлами выключен: в облаке только записи.
+        round(&cloud, &a, &key, &mut sa).unwrap();
+        assert!(cloud.names(Dir::Books).is_empty());
+        lock(&a).set_meta(SYNC_KEY, "1").unwrap();
+        let r = round(&cloud, &a, &key, &mut sa).unwrap();
+        assert_eq!(r.books_sent, 1);
+        let names = cloud.names(Dir::Books);
+        assert_eq!(names.len(), 3, "три куска: {names:?}");
+        assert!(names.iter().all(|n| ours(Dir::Books, n) && !n.contains(&id[..16])));
+        // Второе устройство: записи пришли, файла нет, пока обмен файлами выключен.
+        let r = round(&cloud, &b, &key, &mut sb).unwrap();
+        assert_eq!(r.books_received, 0);
+        lock(&b).set_meta(SYNC_KEY, "1").unwrap();
+        // Пока в облаке не все куски — ждём.
+        let last = key.book_name(&id, 2, 3);
+        let kept = cloud.raw(Dir::Books, &last).unwrap();
+        cloud.remove(Dir::Books, &last);
+        let r = round(&cloud, &b, &key, &mut sb).unwrap();
+        assert_eq!((r.books_received, r.books_waiting), (0, 1));
+        // Подменённый кусок не пройдёт: имя входит в проверку подлинности.
+        cloud.set_raw(Dir::Books, &last, cloud.raw(Dir::Books, &key.book_name(&id, 1, 3)).unwrap());
+        let r = round(&cloud, &b, &key, &mut sb).unwrap();
+        assert_eq!(r.books_received, 0);
+        assert!(!r.problems.is_empty());
+        cloud.set_raw(Dir::Books, &last, kept);
+        let r = round(&cloud, &b, &key, &mut sb).unwrap();
+        assert_eq!((r.books_received, r.books_waiting), (1, 0), "{r:?}");
+        let got = crate::files::path_in(lock(&b).books_dir().unwrap(), &id).unwrap();
+        assert_eq!(std::fs::read(got).unwrap(), data);
+        // Больше делать нечего.
+        let r = round(&cloud, &b, &key, &mut sb).unwrap();
+        assert_eq!((r.books_received, r.books_sent), (0, 0));
+        // Удаление данных из облака убирает и куски файлов.
+        wipe(&cloud, &AtomicBool::new(false)).unwrap();
+        assert!(cloud.names(Dir::Books).is_empty());
     }
 
     #[test]
