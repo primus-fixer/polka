@@ -12,6 +12,7 @@ import { store, stored } from '../storage';
 import { MarkList, Sheet, THEME_ORDER, highlights, pct, timeLeft, useAndroidBack, useWakeLock } from '../reader/ui';
 import { Icon, RatingPicker, Seg } from '../ui';
 import QuotePicture from './QuotePicture';
+import { setTitleBarColors } from '../TitleBar';
 
 type Spot = { chapter: number; offset: number };
 type Target = { offset?: number; anchor?: string; end?: boolean; fraction?: number; hit?: { offset: number; len: number } };
@@ -749,6 +750,9 @@ export default function Reader({ hash, at, nav, titles, onClose }: { hash: strin
   const bookmarks = marks.filter((m) => m.kind === 'bookmark' && m.book === hash).sort(byPlace);
   const quotes = marks.filter((m) => m.kind === 'quote' && m.book === hash).sort(byPlace);
   const theme = THEMES[resolveTheme(look.theme)];
+  // Полоса окна на компьютере — цвета темы читалки, после читалки — снова цвета «Полки».
+  useEffect(() => setTitleBarColors(theme.bg, theme.ink), [theme.bg, theme.ink]);
+  useEffect(() => () => setTitleBarColors(null), []);
   const style = {
     '--rd-bg': theme.bg,
     '--rd-ink': theme.ink,

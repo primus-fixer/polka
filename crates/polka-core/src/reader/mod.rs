@@ -6,6 +6,7 @@
 //! Место чтения (`Reading`) — запись журнала: обменивается между устройствами, как полка.
 //! PDF ядро не разбирает на главы: из файла — только сведения для полки (`pdf`), страницы рисует интерфейс.
 
+mod cites;
 pub mod css;
 pub mod epub;
 pub mod fb2;
@@ -346,10 +347,12 @@ fn split_big(parts: Vec<(String, Vec<Out>)>, toc: &mut [TocItem]) -> Vec<(String
 }
 
 /// Собирает книгу из глав-деревьев: JSON для страницы, текст для поиска и объём.
-fn finish(format: BookFormat, meta: Meta, parts: Vec<(String, Vec<Out>)>, mut toc: Vec<TocItem>, res: Res) -> Result<Book> {
+fn finish(format: BookFormat, meta: Meta, mut parts: Vec<(String, Vec<Out>)>, mut toc: Vec<TocItem>, res: Res) -> Result<Book> {
     if parts.is_empty() {
         return Err(bad("В книге нет текста"));
     }
+    // «[N]» без настоящих сносок — сноски на пункты списка литературы, если он есть.
+    cites::link(&mut parts);
     let parts = split_big(parts, &mut toc);
     let mut chapters = Vec::with_capacity(parts.len());
     let mut html = Vec::with_capacity(parts.len());

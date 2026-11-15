@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, inApp, isMobileApp, message, scanQr, type LanNearby, type LanPeer, type LanView, type PairResult } from '../api';
 import { NB } from '../format';
+import { Cut } from '../ui';
 
 /** «2 мин назад», «вчера в 18:30», «12 ноября в 09:05». */
 export function agoText(unix: number, now = Date.now()): string {
@@ -163,8 +164,7 @@ export default function WifiSection({ onSynced }: { onSynced: () => void }) {
   const v = view;
   const peers = v?.peers ?? [];
   return (
-    <section className="stack-s wifi">
-      <h2 className="sec">Обмен по Wi-Fi</h2>
+    <Cut id="wifi" title="Обмен по Wi-Fi" className="wifi" hint={peers.length ? `связано: ${peers.length}` : 'не связано'}>
       {peers.length > 0 && (
         <div className="stack-s">
           {peers.map((p) => (
@@ -304,6 +304,6 @@ export default function WifiSection({ onSynced }: { onSynced: () => void }) {
       {result && <p className="small ok-text">{resultText(result)}</p>}
       {result?.hint && <p className="small warn-text">{result.hint}</p>}
       {!inApp && <p className="small muted">В демо код показывается понарошку, а связь и обмен не работают.</p>}
-    </section>
+    </Cut>
   );
 }

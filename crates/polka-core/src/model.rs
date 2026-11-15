@@ -187,6 +187,9 @@ impl Title {
         if self.tags.len() > 30 || self.tags.iter().any(|t| t.trim().is_empty() || t.chars().count() > 40) {
             return Err(bad("Метки: не больше 30, каждая до 40 знаков"));
         }
+        if self.genres.len() > 10 || self.genres.iter().any(|g| g.trim().is_empty() || g.chars().count() > 60) {
+            return Err(bad("Жанры: не больше 10, каждый до 60 знаков"));
+        }
         if let (Some(a), Some(b)) = (self.started, self.finished) {
             if b < a {
                 return Err(bad("Дата окончания раньше даты начала"));
@@ -222,6 +225,13 @@ impl Title {
             }
         }
         self.tags = tags;
+        let mut genres: Vec<String> = Vec::new();
+        for g in self.genres.iter().map(|g| g.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|g| !g.is_empty()) {
+            if !genres.iter().any(|x| x.to_lowercase() == g.to_lowercase()) {
+                genres.push(g);
+            }
+        }
+        self.genres = genres;
         self.creators.retain(|c| !c.trim().is_empty());
         for s in &mut self.seasons {
             s.seen.sort_by_key(|x| x.ep);
@@ -349,6 +359,17 @@ impl Title {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn genres_are_tidied_and_checked() {
+        let mut t = Title::new(Kind::Book, "Цивилизация каннибалов", Date::parse("2026-11-15").unwrap());
+        t.genres = vec![" Психология ".into(), "психология".into(), "Научно-популярное".into(), "  ".into()];
+        t.tidy();
+        assert_eq!(t.genres, ["Психология", "Научно-популярное"]);
+        assert!(t.check().is_ok());
+        t.genres = (0..11).map(|i| format!("жанр {i}")).collect();
+        assert!(t.check().is_err(), "больше 10 жанров");
+    }
 
     fn d(s: &str) -> Date {
         Date::parse(s).unwrap()

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Nav } from '../App';
 import { api, inApp, isMobileApp, message, type BackupEvery, type BackupInfo, type BackupStatus } from '../api';
 import { NB, count } from '../format';
-import { Bar, Icon, Seg } from '../ui';
+import { Bar, Cut, Icon, Seg } from '../ui';
 
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
@@ -311,8 +311,7 @@ export default function BackupSection({ nav }: { nav: Nav }) {
   const lastText = st?.last ? whenText(st.last.at) : shared ? `${whenText(shared.at)}${shared.device ? `, «${shared.device}»` : ''}` : null;
 
   return (
-    <section className="stack-s">
-      <h2 className="sec">Резервная копия</h2>
+    <Cut id="backup" title="Резервная копия" hint={!st ? undefined : st.every === 'off' ? 'автокопии выключены' : st.every === 'week' ? 'раз в неделю' : 'каждый день'}>
       <input
         ref={input}
         type="file"
@@ -423,6 +422,6 @@ export default function BackupSection({ nav }: { nav: Nav }) {
       {restoring && <Restore key={restoring.name + restoring.size + restoring.lastModified} first={restoring} nav={nav} pick={pick} onClose={() => setRestoring(null)} />}
       {error && <p className="small warn-text">{error}</p>}
       {!inApp && <p className="small muted">В демо копия делается понарошку, а восстановление не работает.</p>}
-    </section>
+    </Cut>
   );
 }

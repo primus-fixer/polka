@@ -1,7 +1,7 @@
 // Настройки: вход по PIN-коду, отпечатком или через Windows Hello — у каждого устройства свой.
 import type { LockStatus } from '../api';
 import { bioLabel, isWindows, type PinMode } from '../Lock';
-import { Icon } from '../ui';
+import { Cut, Icon } from '../ui';
 
 export type Security = {
   lock: LockStatus | null;
@@ -23,8 +23,7 @@ export default function SecuritySection({ sec }: { sec: Security }) {
   else bioNote = isWindows ? 'Отпечаток, лицо или PIN Windows — что настроено в Windows Hello. PIN-код «Полки» остаётся запасным' : 'PIN-код остаётся запасным';
   const recover = isWindows ? 'через Windows Hello' : isAndroid ? 'блокировкой экрана телефона' : 'средствами системы';
   return (
-    <section className="stack-s">
-      <h2 className="sec">Вход</h2>
+    <Cut id="security" title="Вход" hint={!lock.pin ? 'без кода' : lock.bio ? `PIN-код и ${bio.name}` : 'по PIN-коду'}>
       <p className="small muted">
         {lock.pin ? 'PIN-код спрашивается при запуске и после 5 минут в фоне.' : 'Сейчас «Полка» открывается без кода.'} PIN-код у каждого устройства свой и на другие не переходит.
       </p>
@@ -56,6 +55,6 @@ export default function SecuritySection({ sec }: { sec: Security }) {
         </span>
       </label>
       {lock.pin && <p className="small muted">Забыли PIN-код — на экране входа нажмите «Забыли PIN?» и подтвердите себя {recover}. Данные останутся.</p>}
-    </section>
+    </Cut>
   );
 }

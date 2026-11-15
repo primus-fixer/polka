@@ -139,6 +139,7 @@ pub fn list() -> Vec<ToolInfo> {
                     "date": date("Дата статуса ГГГГ-ММ-ДД: добавлено, начато, закончено или брошено; по умолчанию сегодня"),
                     "rating": { "type": "integer", "minimum": 1, "maximum": 10, "description": "Оценка от 1 до 10 — для doing, done и dropped" },
                     "tags": tags("Метки; лучше из тех, что уже есть (см. summary)"),
+                    "genres": tags("Жанры, если каталог их не знает или человек назвал свои"),
                     "note": { "type": "string", "description": "Заметка: впечатления своими словами человека" },
                     "format": { "type": "string", "enum": ["paper", "ebook", "audio"], "description": "Книга: бумажная, электронная или аудио; по умолчанию бумажная" },
                     "seasons": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 2000 }, "description": "Сериал: число серий в каждом сезоне по порядку, если каталог не знает" },
@@ -152,7 +153,7 @@ pub fn list() -> Vec<ToolInfo> {
         ToolInfo {
             name: "update_title",
             title: "Изменить запись",
-            description: "Изменить запись: статус (даты ставятся сами, можно указать date), оценку, заметку, метки, формат книги, исправить название, авторов или год. Передавайте только то, что меняется.",
+            description: "Изменить запись: статус (даты ставятся сами, можно указать date), оценку, заметку, метки, жанры, формат книги, исправить название, авторов или год. Передавайте только то, что меняется.",
             input_schema: obj(
                 json!({
                     "id": { "type": "string", "description": "id записи" },
@@ -165,6 +166,7 @@ pub fn list() -> Vec<ToolInfo> {
                     "tags": tags("Метки целиком (заменяют прежние)"),
                     "add_tags": tags("Добавить метки"),
                     "remove_tags": tags("Убрать метки"),
+                    "genres": tags("Жанры целиком (заменяют прежние), до 10"),
                     "format": { "type": "string", "enum": ["paper", "ebook", "audio"], "description": "Формат книги" },
                     "title": { "type": "string", "description": "Исправленное название" },
                     "original": { "type": "string", "description": "Оригинальное название" },
@@ -760,6 +762,9 @@ fn add_title(store: &Store, today: Date, args: &Value, lookup: Option<Lookup>) -
     if let Some(tags) = arg_strs(args, "tags") {
         t.tags = tags;
     }
+    if let Some(genres) = arg_strs(args, "genres").filter(|g| !g.is_empty()) {
+        t.genres = genres;
+    }
     if let Some(n) = arg_str(args, "note") {
         t.note = n;
     }
@@ -832,6 +837,10 @@ fn update_title(store: &Store, today: Date, args: &Value) -> ToolResult<Change> 
         let rm: Vec<String> = rm.iter().map(|x| x.to_lowercase()).collect();
         t.tags.retain(|x| !rm.contains(&x.to_lowercase()));
         what.push("метки".into());
+    }
+    if let Some(genres) = arg_strs(args, "genres") {
+        t.genres = genres;
+        what.push("жанры".into());
     }
     if let Some(f) = arg_str(args, "format") {
         if t.kind != Kind::Book {
@@ -1145,6 +1154,9 @@ mod tests {
     fn update_mark_delete_goal_and_undo_rules() {
         let (_d, mut st) = store();
         sample(&mut st);
+        let c = apply_ok(&mut st, "update_title", json!({ "id": "piknik", "genres": ["Фантастика", "Классика"] }));
+        assert!(c.text.contains("жанры"), "{}", c.text);
+        assert_eq!(st.get::<Title>(KIND, "piknik").unwrap().unwrap().genres, ["Фантастика", "Классика"]);
         let c = apply_ok(&mut st, "update_title", json!({ "id": "opp", "status": "done", "rating": 9, "add_tags": ["с семьёй"] }));
         assert!(c.text.contains("оценка 9 из 10"), "{}", c.text);
         let t: Title = st.get(KIND, "opp").unwrap().unwrap();
