@@ -96,7 +96,9 @@ fn same(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/// Окно «Полки» — на передний план: войти по PIN-коду или открыть второй запуск.
+/// Окно «Полки» — на передний план: войти по PIN-коду или открыть второй запуск. На телефоне окна
+/// не сворачивают — там этого нет.
+#[cfg(desktop)]
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
