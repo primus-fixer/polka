@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 # Общий модуль kit: протокол коннектора для Claude, формат резервной копии (https://github.com/primus-fixer/kit).
-kit-core = { git = "https://github.com/primus-fixer/kit", rev = "79cd455293a8cee31f0a641c0c90da638e7cbb96" }
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "6d19930282973c7fbae0aa240a27baedc91530b1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.42", features = ["bundled-sqlcipher-vendored-openssl"] }

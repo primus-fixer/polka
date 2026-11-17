@@ -23,9 +23,9 @@ polka-core = { path = "../../crates/polka-core" }
 # Общий модуль kit 0.7.0: ключ базы в хранилище системы, PIN-код и вход
 # (https://github.com/primus-fixer/kit). Ссылка — на коммит версии; когда у kit появится метка
 # v0.7.0, `rev` заменяется на `tag = "v0.7.0"`.
-kit-core = { git = "https://github.com/primus-fixer/kit", rev = "79cd455293a8cee31f0a641c0c90da638e7cbb96" }
-kit-secure = { git = "https://github.com/primus-fixer/kit", rev = "79cd455293a8cee31f0a641c0c90da638e7cbb96" }
-kit-tauri = { git = "https://github.com/primus-fixer/kit", rev = "79cd455293a8cee31f0a641c0c90da638e7cbb96" }
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "6d19930282973c7fbae0aa240a27baedc91530b1" }
+kit-secure = { git = "https://github.com/primus-fixer/kit", rev = "6d19930282973c7fbae0aa240a27baedc91530b1" }
+kit-tauri = { git = "https://github.com/primus-fixer/kit", rev = "6d19930282973c7fbae0aa240a27baedc91530b1" }
 # Страница Яндекс ID, где создают пароль приложения для Диска.
 tauri-plugin-opener = "2"
 # Связь по Wi-Fi: адреса устройства в сети и QR-код со своим адресом и кодом связи.

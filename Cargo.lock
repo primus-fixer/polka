@@ -2287,7 +2287,7 @@ dependencies = [
 [[package]]
 name = "kit-core"
 version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=79cd455293a8cee31f0a641c0c90da638e7cbb96#79cd455293a8cee31f0a641c0c90da638e7cbb96"
+source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2303,7 +2303,7 @@ dependencies = [
 [[package]]
 name = "kit-secure"
 version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=79cd455293a8cee31f0a641c0c90da638e7cbb96#79cd455293a8cee31f0a641c0c90da638e7cbb96"
+source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2315,7 +2315,7 @@ dependencies = [
 [[package]]
 name = "kit-tauri"
 version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=79cd455293a8cee31f0a641c0c90da638e7cbb96#79cd455293a8cee31f0a641c0c90da638e7cbb96"
+source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
 dependencies = [
  "kit-core",
  "kit-secure",
