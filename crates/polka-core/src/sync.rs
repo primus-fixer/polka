@@ -70,6 +70,9 @@ impl FileInfo for BookFile {
     fn size(&self) -> u64 {
         self.size
     }
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 fn store_err(e: Error) -> kit_core::Error {
