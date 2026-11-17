@@ -1,7 +1,7 @@
 {
   "name": "polka-app",
   "private": true,
-  "version": "0.11.2",
+  "version": "0.11.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "@fontsource/geologica": "^5.3.0",
     "@fontsource/golos-text": "^5.3.0",
     "@fontsource/literata": "^5.3.0",
-    "@primus-fixer/kit": "github:primus-fixer/kit#974577c9f166af47ef892693d38774f3f07ed047",
+    "@primus-fixer/kit": "github:primus-fixer/kit#2869254ea0820dfa45cef690f95555db1661eb87",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-barcode-scanner": "^2.5.3",
     "pdfjs-dist": "^6.5.438",
