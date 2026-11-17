@@ -1,14 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource/golos-text/400.css';
-import '@fontsource/golos-text/500.css';
-import '@fontsource/golos-text/600.css';
-import '@fontsource/geologica/300.css';
-import '@fontsource/geologica/400.css';
-import '@fontsource/geologica/500.css';
+// Общий вид приложений на kit: шрифты, стили, своя полоса окна; свои стили «Полки» — после общих.
+import '@primus-fixer/kit/ui/fonts';
+import '@primus-fixer/kit/ui/styles.css';
 import './styles.css';
+import { TitleBar, customTitleBar } from '@primus-fixer/kit/ui';
 import App from './App';
-import TitleBar, { customTitleBar } from './TitleBar';
 
 // Своя полоса окна — сразу, чтобы раскладка не прыгала.
 if (customTitleBar) document.documentElement.classList.add('own-titlebar');

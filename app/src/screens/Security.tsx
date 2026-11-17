@@ -1,6 +1,6 @@
 // Настройки: вход по PIN-коду, отпечатком или через Windows Hello — у каждого устройства свой.
 import type { LockStatus } from '../api';
-import { bioLabel, isWindows, type PinMode } from '../Lock';
+import { bioLabel, isWindows, type PinMode } from '@primus-fixer/kit/ui';
 import { Cut, Icon } from '../ui';
 
 export type Security = {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Nav } from '../App';
 import { api, inApp, message, type Goal, type Settings as S } from '../api';
 import { plural } from '../format';
-import { SCHEMES, type ThemeMode } from '../theme';
+import { SCHEMES, type ThemeMode } from '@primus-fixer/kit/ui';
 import { Cut, Seg } from '../ui';
 import BackupSection from './Backup';
 import BookFilesSection from './BookFiles';

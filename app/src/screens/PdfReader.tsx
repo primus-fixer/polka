@@ -11,10 +11,10 @@ import { dayMonth, plural } from '../format';
 import { coverFromDoc, docOptions, findInPage, loadPdf, normQuery, offsetIn, pageText, pdfError, rangeIn, type PageText, type PdfHit } from '../reader/pdf';
 import { readSpeed, resolveTheme, THEMES, type ReaderTheme } from '../reader/settings';
 import { MarkList, Sheet, THEME_ORDER, highlight, pct, timeLeft, useAndroidBack, useWakeLock } from '../reader/ui';
-import { store, stored } from '../storage';
+import { store, stored } from '@primus-fixer/kit/ui';
 import { Icon, RatingPicker, Seg } from '../ui';
 import QuotePicture from './QuotePicture';
-import { setTitleBarColors } from '../TitleBar';
+import { setTitleBarColors } from '@primus-fixer/kit/ui';
 
 type Panel = null | 'toc' | 'look' | 'search' | 'end';
 type Tab = 'toc' | 'bookmarks' | 'quotes';

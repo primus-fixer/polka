@@ -1,12 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, LOCKED, message, type ClaudeEvent, type Goal, type Imported, type LocalBook, type LockStatus, type Reading, type RemoteBook, type Title } from './api';
 import { todayIso, yearOf } from './format';
-import { applyTheme, type ThemeMode } from './theme';
 import { takeBook, takeOpened, takeShared } from './share';
 import { pushWidget } from './widget';
-import { store, stored } from './storage';
 import { Icon } from './ui';
-import { LockScreen, PinFlow, type PinMode } from './Lock';
+import { LockScreen, PinFlow, applyTheme, store, stored, type PinMode, type ThemeMode } from '@primus-fixer/kit/ui';
 import Add from './screens/Add';
 import Card from './screens/Card';
 import Home, { readSort, type ShelfSort } from './screens/Home';
@@ -19,6 +17,9 @@ const Reader = lazy(() => import('./screens/Reader'));
 const PdfReader = lazy(() => import('./screens/PdfReader'));
 /** Открыть книгу сразу на месте (цитата из карточки): глава, знак, длина подсветки. */
 export type ReaderAt = { chapter: number; offset: number; len: number };
+
+/** Название «Полки» на экране входа. */
+const LOCK_NAMES = { name: 'Полка', nameAcc: 'Полку' };
 
 export type Route =
   | { name: 'home' }
@@ -373,9 +374,10 @@ export default function App() {
 
   const overlays = (
     <>
-      {locked && lock && <LockScreen key={lockKey} status={lock} onUnlocked={onUnlocked} />}
+      {locked && lock && <LockScreen key={lockKey} status={lock} api={api} names={LOCK_NAMES} onUnlocked={onUnlocked} />}
       {pinFlow && !locked && (
         <PinFlow
+          api={api}
           mode={pinFlow}
           onClose={() => setPinFlow(null)}
           onDone={(st, text) => {

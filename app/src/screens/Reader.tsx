@@ -8,11 +8,11 @@ import { addReadingFonts, readingFontsReady } from '../reader/fonts';
 import { Pager } from '../reader/pager';
 import { build, findNote } from '../reader/render';
 import { FONTS, LEADINGS, MARGINS, SIZE_MAX, SIZE_MIN, THEMES, readSettings, readSpeed, resolveTheme, saveSettings, saveSpeed, type ReaderFont, type ReaderSettings } from '../reader/settings';
-import { store, stored } from '../storage';
+import { store, stored } from '@primus-fixer/kit/ui';
 import { MarkList, Sheet, THEME_ORDER, highlights, pct, timeLeft, useAndroidBack, useWakeLock } from '../reader/ui';
 import { Icon, RatingPicker, Seg } from '../ui';
 import QuotePicture from './QuotePicture';
-import { setTitleBarColors } from '../TitleBar';
+import { setTitleBarColors } from '@primus-fixer/kit/ui';
 
 type Spot = { chapter: number; offset: number };
 type Target = { offset?: number; anchor?: string; end?: boolean; fraction?: number; hit?: { offset: number; len: number } };

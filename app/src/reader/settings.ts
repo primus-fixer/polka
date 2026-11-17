@@ -1,5 +1,5 @@
 // Вид читалки на этом устройстве: размер и гарнитура, интервал, поля, тема, выравнивание.
-import { store, stored } from '../storage';
+import { store, stored } from '@primus-fixer/kit/ui';
 
 export type ReaderTheme = 'auto' | 'light' | 'sepia' | 'dark';
 export type ReaderFont = 'serif' | 'sans';
