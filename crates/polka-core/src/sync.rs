@@ -9,17 +9,15 @@
 //! забирает у другой недостающие файлы кусками, с докачкой (см. [`crate::files`]). Здесь — то, чем
 //! «Полка» отличается: её журнал ([`Journal`] для базы), файлы книг и настройки обмена.
 //!
-//! Канал ([`Wire`]) шифрует каждое сообщение; ключи и порядок пакетов — в [`crate::lan`].
+//! Канал шифрует каждое сообщение; ключи и порядок пакетов — в общем модуле (`kit_core::lan`),
+//! настройки «Полки» — в [`crate::lan`].
 
 use crate::db::{Event, Store};
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::files::{self, BookFile};
 use kit_core::sync::{self as kit, FileInfo, Journal, Profile};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::sync::Mutex;
-
-pub(crate) use kit::{prepare, Wire, MAX_FRAME};
 
 /// Последний известный номер события от каждого устройства.
 pub type VersionVector = BTreeMap<String, i64>;
@@ -29,27 +27,6 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Обмен «Полки»: поля `files` нет (вложения умеют все её версии), файлы книг — с 0.8.0.
 pub const PROFILE: Profile = Profile { version: APP_VERSION, files_flag: false, old_peer: "", chunked_since: Some((0, 8)) };
-
-/// Сообщения обмена.
-pub(crate) type Msg = kit::Msg<Event>;
-
-/// Сообщения поверх канала — для связи по коду (кто я) и проверок.
-pub(crate) trait MsgWire: Wire + Sized {
-    fn send(&mut self, msg: &Msg) -> Result<()> {
-        Ok(kit::send(self, msg)?)
-    }
-    /// Следующее сообщение, не больше `max` байт.
-    fn recv_max(&mut self, max: usize) -> Result<Msg> {
-        Ok(kit::recv_max(self, max)?)
-    }
-    /// Следующее сообщение любого размера до предела — в проверках канала.
-    #[cfg(test)]
-    fn recv(&mut self) -> Result<Msg> {
-        self.recv_max(MAX_FRAME)
-    }
-}
-
-impl<W: Wire> MsgWire for W {}
 
 /// Чем закончился обмен.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -144,16 +121,4 @@ impl Journal for Store {
     fn file_write(&mut self, file: &BookFile, offset: u64, total: u64, data: &[u8]) -> kit_core::Result<bool> {
         files::write_part(self, file, offset, total, data).map_err(store_err)
     }
-}
-
-/// Обмен со стороны подключившегося. `expect` — какое устройство должно ответить
-/// (по ключу пары): ответ другого — обрыв до того, как его записи приняты.
-pub(crate) fn run_client(w: &mut impl Wire, store: &Mutex<Store>, name: &str, expect: Option<&str>) -> Result<SyncReport> {
-    Ok(kit::run_client(&PROFILE, w, store, name, expect)?.into())
-}
-
-/// Обмен со стороны ждущего. `expect` — какое устройство должно прийти
-/// (по ключу пары): другое имя в приветствии — обрыв.
-pub(crate) fn run_server(w: &mut impl Wire, store: &Mutex<Store>, name: &str, expect: Option<&str>) -> Result<SyncReport> {
-    Ok(kit::run_server(&PROFILE, w, store, name, expect)?.into())
 }

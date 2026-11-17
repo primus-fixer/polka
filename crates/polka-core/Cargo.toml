@@ -6,8 +6,9 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Общий модуль kit: протокол коннектора для Claude, формат резервной копии, протокол синхронизации (https://github.com/primus-fixer/kit).
-kit-core = { git = "https://github.com/primus-fixer/kit", rev = "125a96f3f4f10b932231171dcbf31ad929a46403" }
+# Общий модуль kit: протокол коннектора для Claude, формат резервной копии, протокол синхронизации,
+# связь по Wi-Fi (https://github.com/primus-fixer/kit).
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "0e24907e8d477f356f2db5c8c35ed601bf8c5622" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.42", features = ["bundled-sqlcipher-vendored-openssl"] }
@@ -16,9 +17,8 @@ getrandom = "0.3"
 argon2 = "0.5"
 base64 = "0.22"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
-# Связь по Wi-Fi: ключ из кода (SPAKE2) и подписи (BLAKE2b), как в «Кармане».
+# Облако: ключи и подписи (BLAKE2b), как в «Кармане».
 blake2 = "0.10"
-spake2 = "0.4"
 # Облако: файлы событий сжимаются перед шифрованием, как в «Кармане».
 miniz_oxide = "0.8"
 sha2 = "0.10"

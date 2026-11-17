@@ -11,80 +11,20 @@ use crate::error::{bad, Error, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD as B64;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
 
 pub const SCHEME: &str = "polka://pair?";
 
-/// Адрес домашней сети: частные диапазоны IPv4 (и точки доступа телефона), 100.64/10,
-/// link-local и свой компьютер; для IPv6 — link-local и ULA. Имена хостов не подходят.
-pub fn is_local_address(host: &str) -> bool {
-    match host.parse::<IpAddr>() {
-        Ok(IpAddr::V4(v4)) => {
-            let [a, b, ..] = v4.octets();
-            v4.is_private() || v4.is_loopback() || v4.is_link_local() || (a == 100 && (64..128).contains(&b))
-        }
-        Ok(IpAddr::V6(v6)) => {
-            let first = v6.segments()[0];
-            v6.is_loopback() || (first & 0xffc0) == 0xfe80 || (first & 0xfe00) == 0xfc00
-        }
-        Err(_) => false,
-    }
-}
+pub use kit_core::lan::{is_local_address, show_code, CODE_ALPHABET, CODE_LEN};
 
-/// Знаки кода: латиница и цифры без похожих друг на друга 0 и O, 1 и I — 32 знака, 5 бит на знак.
-pub const CODE_ALPHABET: &[u8; 32] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-/// Знаков в коде: 40 бит — с пятью попытками подобрать нельзя.
-pub const CODE_LEN: usize = 8;
-
-/// Новый код связи: восемь случайных знаков.
+/// Новый код связи: восемь случайных знаков (из общего модуля kit).
 pub fn new_code() -> Result<String> {
-    let mut b = [0u8; CODE_LEN];
-    getrandom::fill(&mut b).map_err(|e| Error::Random(e.to_string()))?;
-    Ok(b.iter().map(|x| CODE_ALPHABET[(x & 31) as usize] as char).collect())
+    Ok(kit_core::lan::new_code()?)
 }
 
-/// Код для экрана: «6WVG-HEWK».
-pub fn show_code(code: &str) -> String {
-    if code.len() == CODE_LEN {
-        format!("{}-{}", &code[..4], &code[4..])
-    } else {
-        code.to_string()
-    }
-}
-
-/// Код, как его ввёл человек, — к виду «6WVGHEWK»: без пробелов и дефисов, заглавными, русские буквы,
-/// похожие на латинские (с телефонной клавиатуры), — латинскими.
+/// Код, как его ввёл человек, — к виду «6WVGHEWK» (из общего модуля kit): без пробелов и дефисов,
+/// заглавными, русские буквы, похожие на латинские, — латинскими.
 pub fn normalize_code(input: &str) -> Result<String> {
-    let mut out = String::new();
-    for c in input.chars() {
-        if c.is_whitespace() || c == '-' || c == '–' || c == '—' {
-            continue;
-        }
-        let up = c.to_uppercase().next().unwrap_or(c);
-        let latin = match up {
-            'А' => 'A',
-            'В' => 'B',
-            'Е' | 'Ё' => 'E',
-            'К' => 'K',
-            'М' => 'M',
-            'Н' => 'H',
-            'Р' => 'P',
-            'С' => 'C',
-            'Т' => 'T',
-            'У' => 'Y',
-            'Х' => 'X',
-            'З' => '3',
-            other => other,
-        };
-        if !latin.is_ascii() || !CODE_ALPHABET.contains(&(latin as u8)) {
-            return Err(bad(format!("в коде нет знака «{c}»: только латинские буквы и цифры с экрана того устройства")));
-        }
-        out.push(latin);
-    }
-    if out.len() != CODE_LEN {
-        return Err(bad("в коде восемь знаков, например 6WVG-HEWK"));
-    }
-    Ok(out)
+    Ok(kit_core::lan::normalize_code(input)?)
 }
 
 /// QR-код связи: адрес устройства в сети и код связи. Ключа в нём нет.
