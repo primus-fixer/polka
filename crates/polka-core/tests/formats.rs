@@ -389,7 +389,7 @@ fn make_fixtures() {
         "events": events,
         "cloud_files": names,
         "strings": {
-            "qr_invite": invite().to_uri(),
+            "qr_invite": invite().to_uri(&polka_core::lan::LAN),
             "code_shown": pairing::show_code(&invite().code),
             "backup_key": backup_key.to_meta(),
             "cloud_key": cloud_key.to_meta(),

@@ -2287,7 +2287,7 @@ dependencies = [
 [[package]]
 name = "kit-cloud"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4#c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4"
+source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
 dependencies = [
  "base64 0.22.1",
  "kit-core",
@@ -2299,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "kit-core"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4#c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4"
+source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2318,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "kit-secure"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4#c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4"
+source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2330,11 +2330,15 @@ dependencies = [
 [[package]]
 name = "kit-tauri"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4#c513bcc1931ad8ae4977c597c5c3b8f7eb1a4fc4"
+source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
 dependencies = [
+ "base64 0.22.1",
+ "if-addrs",
  "kit-core",
  "kit-secure",
+ "qrcode",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-plugin-biometric",
 ]
