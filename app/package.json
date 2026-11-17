@@ -12,7 +12,7 @@
     "@fontsource/geologica": "^5.3.0",
     "@fontsource/golos-text": "^5.3.0",
     "@fontsource/literata": "^5.3.0",
-    "@primus-fixer/kit": "github:primus-fixer/kit#0de67320a3c57c57d1c4f3e582e3cadca4a06fa1",
+    "@primus-fixer/kit": "github:primus-fixer/kit#326f7aa5623a0ea38122a3bc2650682896536c86",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-barcode-scanner": "^2.5.3",
     "pdfjs-dist": "^6.5.438",

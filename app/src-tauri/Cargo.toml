@@ -22,9 +22,9 @@ polka-core = { path = "../../crates/polka-core" }
 # Общий модуль kit 0.11.0: ключ базы в хранилище системы, PIN-код и вход
 # (https://github.com/primus-fixer/kit). Ссылка — на коммит версии; когда у kit появится метка
 # v0.11.0, `rev` заменяется на `tag = "v0.11.0"`.
-kit-core = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa" }
-kit-secure = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa" }
-kit-tauri = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa" }
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86" }
+kit-secure = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86" }
+kit-tauri = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86" }
 # Страница Яндекс ID, где создают пароль приложения для Диска.
 tauri-plugin-opener = "2"
 

@@ -2287,7 +2287,7 @@ dependencies = [
 [[package]]
 name = "kit-cloud"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
+source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
 dependencies = [
  "base64 0.22.1",
  "kit-core",
@@ -2299,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "kit-core"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
+source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2318,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "kit-secure"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
+source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2330,7 +2330,7 @@ dependencies = [
 [[package]]
 name = "kit-tauri"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
+source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
 dependencies = [
  "base64 0.22.1",
  "if-addrs",
@@ -3172,14 +3172,13 @@ dependencies = [
 
 [[package]]
 name = "polka-app"
-version = "0.11.8"
+version = "0.12.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
  "kit-core",
  "kit-secure",
  "kit-tauri",
- "polka-cloud",
  "polka-core",
  "serde",
  "serde_json",
@@ -3195,7 +3194,7 @@ dependencies = [
 
 [[package]]
 name = "polka-cloud"
-version = "0.11.8"
+version = "0.12.0"
 dependencies = [
  "kit-cloud",
  "kit-core",
@@ -3206,7 +3205,7 @@ dependencies = [
 
 [[package]]
 name = "polka-core"
-version = "0.11.8"
+version = "0.12.0"
 dependencies = [
  "argon2",
  "base64 0.22.1",

@@ -12,10 +12,10 @@ mock = ["kit-cloud/mock"]
 [dependencies]
 polka-core = { path = "../polka-core" }
 # Облако «Полки» — формат, обмен и клиент WebDAV из общего модуля kit (https://github.com/primus-fixer/kit).
-kit-core = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa" }
-kit-cloud = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa" }
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86" }
+kit-cloud = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86" }
 
 [dev-dependencies]
-kit-cloud = { git = "https://github.com/primus-fixer/kit", rev = "b537338f2d8ad77bf6f56f9cb526289079eed9aa", features = ["mock"] }
+kit-cloud = { git = "https://github.com/primus-fixer/kit", rev = "326f7aa5623a0ea38122a3bc2650682896536c86", features = ["mock"] }
 serde_json = "1"
 tempfile = "3"
