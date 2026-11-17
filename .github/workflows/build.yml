@@ -1,7 +1,14 @@
 name: Сборки
 
+# Установщик и APK собираются после слияния в main и по кнопке (Actions → Сборки → Run workflow,
+# на любой ветке), а не на каждый push: сборки под Windows и Android тратят больше всего минут
+# GitHub Actions. Правка только описаний сборку не запускает.
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
 
 # Сборкам токен GitHub нужен только для чтения кода.
