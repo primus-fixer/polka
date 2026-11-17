@@ -121,43 +121,11 @@ export type BackupStatus = {
 export type BackupInfo = { created: number; device: string; app: string; titles: number; events: number; blobs: number; books: number; bytes: number };
 export type RestoreResult = { events: number; blobs: number; books: number; titles: number; list: Title[] };
 
-/** Показанный код связи: «6WVG-HEWK», сколько секунд ещё действует, сколько попыток осталось; QR — код и адрес для телефона. */
-export type LanCode = { code: string; secs: number; left: number; wrong: number; qr_svg: string; hosts: string[]; port: number };
-/** Связанное устройство: в сети ли, идёт ли обмен, последний обмен (unix), версия, почему не получился обмен. */
-export type LanPeer = { id: string; name: string; online: boolean; syncing: boolean; last: number | null; app: string; error: string | null };
-/** Устройство рядом в сети с показанным кодом. */
-export type LanNearby = { device: string; name: string; addr: string };
-export type LanView = { name: string; hosts: string[]; code: LanCode | null; note: string | null; peers: LanPeer[]; nearby: LanNearby[] };
-/** Связь по коду или обмен: с кем, сколько ушло и пришло. */
-export type PairResult = { peer_name: string; sent: number; received: number; files_sent: number; files_received: number; hint: string; remembered: boolean };
-export type LanEvent = { received: number; paired: string | null };
-
-/** Облако: Яндекс Диск по паролю приложения или свой сервер WebDAV. */
+// Связь по Wi-Fi и облако — общие экраны и команды из kit (`@primus-fixer/kit/ui`).
+export type { CloudEvent, CloudLast, CloudStatus, CloudStep, LanCode, LanEvent, LanNearby, LanPeer, LanView, PairResult } from '@primus-fixer/kit/ui';
+import type { CloudEvent, CloudStatus, LanEvent, LanView, PairResult } from '@primus-fixer/kit/ui';
+/** Облако по паролю: Яндекс Диск (пароль приложения) или свой сервер WebDAV. */
 export type CloudProvider = 'yadisk' | 'webdav';
-export type CloudStep = { step: 'events' } | { step: 'upload'; done: number; total: number } | { step: 'download'; done: number; total: number } | { step: 'books'; done: number; total: number };
-export type CloudLast = { at: number; received: number; sent: number; files_received: number; files_sent: number; files_waiting: number; books_received?: number; books_sent?: number; books_waiting?: number; problems: string[] };
-export type CloudProblem = { kind: 'auth' | 'space' | 'offline' | 'server' | 'gone' | 'replaced' | 'conflict' | 'newer' | 'format' | 'cancelled'; text: string; at: number };
-export type CloudStatus = {
-  desktop: boolean;
-  /** off — не подключено; password — нужен пароль копий; relogin — пароль приложения не подходит; ready — подключено. */
-  state: 'off' | 'password' | 'relogin' | 'ready';
-  provider: CloudProvider | null;
-  title: string | null;
-  dav: { url: string; host: string; user: string } | null;
-  /** В облаке уже есть данные «Полки»: пароль копий вводят, а не придумывают. */
-  cloud_exists: boolean;
-  /** На этом устройстве задан пароль копий. */
-  backup_password: boolean;
-  every: 'auto' | 'manual';
-  running: boolean;
-  progress: CloudStep | null;
-  last: CloudLast | null;
-  error: CloudProblem | null;
-  /** Новый пароль копий ещё не ушёл в облако. */
-  key_pending: boolean;
-  notice: string | null;
-};
-export type CloudEvent = { running: boolean; received: number; step: CloudStep | null };
 
 // ——— Читалка ———
 
@@ -328,7 +296,7 @@ const real = {
   saveImage: (name: string, data: string) => invoke<string | null>('save_image', { name, data }),
   cloudStatus: () => invoke<CloudStatus>('cloud_status'),
   /** Вход по логину и паролю: Яндекс Диск (пароль приложения) или свой сервер WebDAV. */
-  cloudDavLogin: (kind: CloudProvider, url: string | null, user: string, password: string) => invoke<CloudStatus>('cloud_dav_login', { kind, url, user, password }),
+  cloudDavLogin: (kind: string, url: string | null, user: string, password: string) => invoke<CloudStatus>('cloud_dav_login', { kind, url, user, password }),
   /** Страница Яндекс ID, где создают пароль приложения. */
   cloudAppPasswords: () => invoke<void>('cloud_app_passwords'),
   cloudPassword: (password: string) => invoke<CloudStatus>('cloud_password', { password }),
