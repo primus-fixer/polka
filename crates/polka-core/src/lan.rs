@@ -675,6 +675,25 @@ fn answer_ip(ip: IpAddr) -> IpAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ключи связи выводятся как в 0.11: иначе устройства с прежней версией перестанут узнавать
+    /// друг друга. Значения посчитаны независимо (BLAKE2b с личной строкой «polka-lan») и не меняются.
+    #[test]
+    fn keys_are_derived_as_before() {
+        let hex = |b: [u8; 32]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let k = [0x11u8; 32];
+        let (nc, ns) = ([0x22u8; 32], [0x33u8; 32]);
+        assert_eq!(hex(mac(&k, &[b"pair key"])), "0bdaaec39968032b1d3d4f267f1283d34bce5504340e6f3a28544770a4c27a43");
+        assert_eq!(hex(mac(&k, &[b"joiner confirm"])), "70b0495f76d7f0ce7d789cdf83ee28fbf7d42d872a3329e409d1f121693e8be1");
+        assert_eq!(hex(mac(&k, &[b"host confirm"])), "16549426e96bd48161ccb91e13103c2ce800be7b821bc73000a5cb8d304def46");
+        assert_eq!(hex(mac(&k, &[b"sync c2s", &nc, &ns])), "051dad75907b35d30c34c1a660deabf656210bee5fe2ff0536b2b152f661c5ff");
+        assert_eq!(hex(mac(&k, &[b"sync s2c", &nc, &ns])), "b065d8f30d2ab476e3b829a2775d6c07f28c5599459608a9deb201a39d6e0a8d");
+        assert_eq!(hex(mac(&k, &[b"query", b"aaaa", b"bbbb", &nc])), "af63aedcbe1f33b2c858987f74ac46bdbc42ec950e870bc6c796ac5977c87733");
+        assert_eq!(hex(mac(&k, &[b"answer", b"bbbb", b"aaaa", &nc, b"47510"])), "2d59f99b83a396f9cad53910b14e0e0832a68bd959e01b347402528a6121494e");
+        assert_eq!((MAGIC, Q_MAGIC, A_MAGIC, VERSION), (b"PLKL", b"PLKQ", b"PLKA", 1));
+        assert_eq!((ID_JOINER, ID_HOST), (&b"polka-joiner"[..], &b"polka-host"[..]));
+        assert_eq!((TCP_PORT, DISCOVERY_PORT), (47510, 47511));
+    }
     use crate::model::{Kind, Title, KIND};
     use crate::Date;
 

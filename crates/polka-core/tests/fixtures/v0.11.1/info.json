@@ -1,0 +1,164 @@
+{
+  "blobs": {
+    "5b7477dd9c716026cbd789f7600f235db31d3dd9339a9bdbba4dafb299a8ed1f": 1100000,
+    "60d7cc72db8482522a2d16f310ec169361e50f1c00e532902cee7443ac606ce8": 40000
+  },
+  "book": {
+    "id": "d40f863db784bd1e82cd10ee0c747a25748306414e690a3281bd3c5de3252080",
+    "size": 300009
+  },
+  "cloud_files": [
+    [
+      "polka.key"
+    ],
+    [
+      "aaaa-1-10.pev"
+    ],
+    [
+      "530d601d095e1e67f164e42158cabb72.pbl",
+      "c3267f0a7797c48d13dfbc8876ef166e.pbl"
+    ],
+    [
+      "b736181da736f79580d3b5ba7fc52b08-0-1.pbk"
+    ]
+  ],
+  "db_key": "1515151515151515151515151515151515151515151515151515151515151515",
+  "device": "aaaa",
+  "events": 10,
+  "made": "cargo test -p polka-core --test formats -- --ignored make_fixtures",
+  "password": "книги на даче",
+  "records": {
+    "file": {
+      "d40f863db784bd1e82cd10ee0c747a25748306414e690a3281bd3c5de3252080": {
+        "added": 1794896400,
+        "format": "pdf",
+        "id": "d40f863db784bd1e82cd10ee0c747a25748306414e690a3281bd3c5de3252080",
+        "name": "picnic.pdf",
+        "size": 300009,
+        "title": "a"
+      }
+    },
+    "goal": {
+      "2026": {
+        "books": 24,
+        "screen": 12
+      }
+    },
+    "mark": {
+      "m1": {
+        "book": "d40f863db784bd1e82cd10ee0c747a25748306414e690a3281bd3c5de3252080",
+        "chapter": 3,
+        "created": 1794899500,
+        "end": 90,
+        "id": "m1",
+        "kind": "quote",
+        "note": "главное",
+        "offset": 40,
+        "percent": 41.0,
+        "text": "Счастье для всех, даром",
+        "title": "a"
+      }
+    },
+    "reading": {
+      "a": {
+        "at": 1794899400,
+        "book": "d40f863db784bd1e82cd10ee0c747a25748306414e690a3281bd3c5de3252080",
+        "chapter": 3,
+        "minutes": 95,
+        "offset": 120,
+        "percent": 41.5,
+        "title": "a"
+      }
+    },
+    "setting": {
+      "files.place": "auto"
+    },
+    "title": {
+      "a": {
+        "added": "2026-10-01",
+        "cover": "5b7477dd9c716026cbd789f7600f235db31d3dd9339a9bdbba4dafb299a8ed1f",
+        "cover_source": "FantLab · АСТ, 2021",
+        "creators": [
+          "Аркадий Стругацкий",
+          "Борис Стругацкий"
+        ],
+        "finished": "2026-11-12",
+        "format": "paper",
+        "genres": [
+          "Фантастика"
+        ],
+        "id": "a",
+        "kind": "book",
+        "note": "Перечитать через год.",
+        "pages": 256,
+        "rating": 9,
+        "seasons": [],
+        "started": "2026-11-02",
+        "status": "done",
+        "tags": [
+          "дача"
+        ],
+        "title": "Пикник на обочине",
+        "year": "1972"
+      },
+      "b": {
+        "added": "2026-11-05",
+        "cover": "60d7cc72db8482522a2d16f310ec169361e50f1c00e532902cee7443ac606ce8",
+        "creators": [
+          "Андрей Тарковский"
+        ],
+        "genres": [],
+        "id": "b",
+        "imdb": 8.0,
+        "kind": "film",
+        "kp": 8.100000381469727,
+        "minutes": 163,
+        "seasons": [],
+        "status": "want",
+        "tags": [],
+        "title": "Сталкер",
+        "year": "1979"
+      },
+      "c": {
+        "added": "2026-11-06",
+        "creators": [],
+        "genres": [],
+        "id": "c",
+        "kind": "series",
+        "seasons": [
+          {
+            "episodes": 5,
+            "no": 1,
+            "seen": [
+              {
+                "ep": 1,
+                "on": "2026-11-07"
+              },
+              {
+                "ep": 2,
+                "on": "2026-11-08"
+              }
+            ]
+          }
+        ],
+        "started": "2026-11-07",
+        "status": "doing",
+        "tags": [],
+        "title": "Чернобыль"
+      }
+    }
+  },
+  "strings": {
+    "backup_key": "1:65536:3:1:fUCuN9Y9kt8yc78L91K4gA==:goL9rMu9W7GrnQHdDfTn6vCqXAX5PhX19OGpXP/taAw=",
+    "cloud_group": "b2687d9449b1363d1f899c2c08d1d2c7",
+    "cloud_key": "1:b2687d9449b1363d1f899c2c08d1d2c7:hjpR8Wt0hLq0sF4095JVcfbtnvzm7tZrD6Qf4cpxN7Y=",
+    "code_shown": "6WVG-HEWK",
+    "event_name": "aaaa-1-500.pev",
+    "link_proof": "554563ff54e07a95654feef3e997189a419816c1bb170198509f4221864d3c2c",
+    "qr_invite": "polka://pair?v=1&d=a1b2c3&n=0J3QvtGD0YLQsdGD0Lo&h=192.168.1.20,10.0.0.5&p=47510&c=6WVGHEWK"
+  },
+  "version": "0.11.1",
+  "versions": {
+    "aaaa": 10
+  }
+}
