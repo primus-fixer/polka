@@ -118,7 +118,7 @@ fn save(st: &Store, peers: &[PeerRec]) -> Res<()> {
 
 fn key_of(rec: &PeerRec) -> Option<[u8; 32]> {
     let blob = B64.decode(&rec.key).ok()?;
-    polka_secure::unprotect(&blob).ok()?.try_into().ok()
+    crate::names::unprotect(&blob).ok()?.try_into().ok()
 }
 
 /// Обновить запись связанного устройства, если оно ещё связано.
@@ -159,7 +159,7 @@ fn host(app: &AppHandle) -> Host {
 
 /// Запомнить связанное устройство (или обновить ключ, если связали заново).
 fn remember(app: &AppHandle, peer: &Peer, key: &[u8; 32]) -> Res<()> {
-    let blob = polka_secure::protect(key).map_err(|e| format!("ключ связи не сохранить в хранилище системы: {e}"))?;
+    let blob = crate::names::protect(key).map_err(|e| format!("ключ связи не сохранить в хранилище системы: {e}"))?;
     let state = app.state::<AppState>();
     let st = state.store.lock().map_err(err)?;
     let mut peers = load(&st);

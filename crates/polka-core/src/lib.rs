@@ -22,7 +22,6 @@ pub mod lan;
 pub mod mcp;
 pub mod model;
 pub mod pairing;
-pub mod pin;
 pub mod reader;
 pub mod stats;
 pub mod sync;

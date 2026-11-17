@@ -4,8 +4,8 @@
 //! Поиск в каталогах и скачивание обложек идут в фоновом потоке, чтобы окно не замирало.
 //! Снимки обложек отдаёт протокол `cover` (адрес `cover://localhost/<id>` или
 //! `http://cover.localhost/<id>` на Windows и Android) — так экран не гоняет картинки через команды.
-//! Картинки книг в читалке — протокол `book` (см. `reader`). Вход по PIN-коду и отпечатку — `guard`:
-//! пока «Полка» заблокирована, команды с данными отвечают `locked`.
+//! Картинки книг в читалке — протокол `book` (см. `reader`). Вход по PIN-коду и отпечатку — общий
+//! модуль kit (`kit_tauri::guard`): пока «Полка» заблокирована, команды с данными отвечают `locked`.
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -22,11 +22,11 @@ use tauri::{Manager, State};
 mod backup;
 mod claude;
 mod cloud;
-mod guard;
 mod lan;
+mod names;
 mod reader;
 
-use guard::{Guard, LOCKED};
+use kit_tauri::guard::{self, Lock};
 
 /// Версия «Полки» — пишется в резервные копии.
 pub(crate) const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -44,7 +44,7 @@ struct AppState {
     /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
     lan: lan::Lan,
     /// Вход по PIN-коду: заблокирована ли «Полка».
-    guard: Mutex<Guard>,
+    guard: Lock,
 }
 
 impl AppState {
@@ -61,14 +61,24 @@ impl AppState {
 
     /// Пока «Полка» заблокирована, команды с данными отвечают `locked`.
     fn unlocked(&self) -> Res<()> {
-        if self.guard.lock().map_err(err)?.locked {
-            return Err(LOCKED.into());
-        }
-        Ok(())
+        self.guard.check()
     }
 
     fn keys(&self) -> Keys {
         self.keys.lock().map(|k| k.clone()).unwrap_or_default()
+    }
+}
+
+/// Местные настройки базы — для входа по PIN-коду: там лежат его хеш и счётчик ошибок.
+struct StoreMeta(Arc<Mutex<Store>>);
+
+impl guard::Meta for StoreMeta {
+    fn get(&self, key: &str) -> Res<Option<String>> {
+        self.0.lock().map_err(err)?.meta(key).map_err(err)
+    }
+
+    fn set(&self, key: &str, value: &str) -> Res<()> {
+        self.0.lock().map_err(err)?.set_meta(key, value).map_err(err)
     }
 }
 
@@ -156,14 +166,14 @@ fn write_atomic(path: &Path, data: &[u8]) -> Res<()> {
 fn read_secret(dir: &Path, name: &str) -> Res<Option<Vec<u8>>> {
     let path = dir.join(format!("{name}.sec"));
     match std::fs::read(&path) {
-        Ok(blob) => polka_secure::unprotect(&blob).map(Some).map_err(|e| format!("{name}: не достать из хранилища системы: {e}")),
+        Ok(blob) => names::unprotect(&blob).map(Some).map_err(|e| format!("{name}: не достать из хранилища системы: {e}")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(err(e)),
     }
 }
 
 fn write_secret(dir: &Path, name: &str, data: &[u8]) -> Res<()> {
-    let blob = polka_secure::protect(data).map_err(err)?;
+    let blob = names::protect(data).map_err(err)?;
     write_atomic(&dir.join(format!("{name}.sec")), &blob)
 }
 
@@ -406,7 +416,7 @@ fn settings(state: State<'_, AppState>, year: i32) -> Res<SettingsView> {
         goal: goal_of(&st, year),
         has_poiskkino: keys.poiskkino.as_deref().is_some_and(|k| !k.is_empty()),
         has_google: keys.google.as_deref().is_some_and(|k| !k.is_empty()),
-        key_method: polka_secure::method(),
+        key_method: kit_secure::method(),
     })
 }
 
@@ -555,10 +565,23 @@ pub fn run() {
             let keys = load_keys(&dir);
             backup::clean_uploads(&dir);
             // С PIN-кодом «Полка» открывается заблокированной.
-            let guard = Guard::new(guard::has_pin(&store));
+            let store = Arc::new(Mutex::new(store));
+            let handle = app.handle().clone();
+            let hooks = guard::Hooks {
+                // Пока «Полка» заблокирована, по прежнему коду связи не подключиться.
+                on_lock: Box::new(move || {
+                    if let Some(state) = handle.try_state::<AppState>() {
+                        lan::on_lock(&state);
+                    }
+                }),
+                // Вернулись в «Полку» — заодно обменяться с облаком, если давно не обменивались.
+                on_resume: Box::new(cloud::resumed),
+            };
+            let guard = Lock::new(names::APP, StoreMeta(store.clone()), hooks);
+            app.manage(guard.clone());
             #[cfg(desktop)]
             let claude_dir = dir.clone();
-            app.manage(AppState { store: Arc::new(Mutex::new(store)), dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard: Mutex::new(guard) });
+            app.manage(AppState { store, dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard });
             app.manage(reader::Books::default());
             // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1 —
             // после того как база открыта, чтобы первый же запрос нашёл её.

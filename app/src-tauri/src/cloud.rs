@@ -157,7 +157,7 @@ fn dav_of(st: &Store) -> Option<DavLogin> {
 fn dav_password(st: &Store) -> Res<Option<String>> {
     let Some(text) = meta(st, META_PASSWORD) else { return Ok(None) };
     let blob = B64.decode(text.trim()).map_err(err)?;
-    let plain = polka_secure::unprotect(&blob).map_err(|e| format!("пароль облака не достать из хранилища системы: {e}"))?;
+    let plain = crate::names::unprotect(&blob).map_err(|e| format!("пароль облака не достать из хранилища системы: {e}"))?;
     String::from_utf8(plain).map(Some).map_err(err)
 }
 
@@ -347,7 +347,7 @@ fn dav_login(app: &AppHandle, link: Link, url: Option<&str>, user: &str, passwor
         Link::WebDav => dav::server_url(url.unwrap_or(""), cfg!(debug_assertions))?,
     };
     let exists = Dav::new(&url, user, &password).connect().map_err(err)?;
-    let blob = polka_secure::protect(password.as_bytes()).map_err(|e| format!("пароль не сохранить в хранилище системы: {e}"))?;
+    let blob = crate::names::protect(password.as_bytes()).map_err(|e| format!("пароль не сохранить в хранилище системы: {e}"))?;
     let login = DavLogin { url, user: user.to_string() };
     let state = app.state::<AppState>();
     let st = state.store()?;
