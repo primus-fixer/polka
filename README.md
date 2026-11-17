@@ -99,7 +99,7 @@ crates/polka-cloud/   облако: Яндекс Диск и свой серве
 (kit)                 общий модуль https://github.com/primus-fixer/kit: ключ базы в хранилище системы
                       (DPAPI, Android Keystore), PIN-код и вход; подключён зависимостью на версию 0.1.0
 app/                  приложение Tauri 2: интерфейс (React; страницы PDF — pdf.js) и мост к ядру (src-tauri)
-scripts/              донастройка Android-проекта при сборке
+scripts/              своя донастройка Android-проекта при сборке (общая — в kit)
 .github/workflows/    проверки, проверка обложек и сборки
 docs/                 списки для проверки обложек, что проверить
 ```
@@ -113,9 +113,11 @@ docs/                 списки для проверки обложек, чт�
 ## Сборки
 
 «Сборки» в Actions запускаются после слияния в `main` и вручную: **Actions → Сборки → Run workflow**,
-там же можно выбрать ветку. Готовые файлы — в разделе Artifacts у запуска:
+там же можно выбрать ветку. Собирают их общие сценарии [kit](https://github.com/primus-fixer/kit), своя
+донастройка Android-проекта — `scripts/android-patch.sh`. Готовые файлы — в разделе Artifacts у запуска:
 
-- `polka-windows` — установщик `.exe` и `.msi`;
+- `polka-windows` — установщик `.exe` и `.msi`; перед ним сборка проверяет, что `polka.exe --mcp`
+  отвечает приложению Claude;
 - `polka-android` — `.apk` для телефона. С секретами `ANDROID_KEYSTORE` и `ANDROID_KEYSTORE_PASSWORD`
   он подписан постоянным ключом и обновляется поверх, без них — отладочная сборка. Псевдоним ключа — `polka`;
   подойдёт и ключ «Кармана», если добавить секрет `ANDROID_KEY_ALIAS` со значением `karman`.
