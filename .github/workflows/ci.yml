@@ -1,7 +1,16 @@
 name: Проверки
 
+# Проверки — на pull request и после слияния в main; правка только описаний их не запускает.
 on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
 
 # Сборкам токен GitHub нужен только для чтения кода.
