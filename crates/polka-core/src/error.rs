@@ -22,9 +22,6 @@ pub enum Error {
     NotFound(String),
     #[error("случайные числа недоступны: {0}")]
     Random(String),
-    /// PIN-код входа.
-    #[error("PIN-код: {0}")]
-    Pin(String),
     /// Резервная копия: файл не подходит, повреждён или обрезан.
     #[error("{0}")]
     Backup(String),

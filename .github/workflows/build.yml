@@ -27,8 +27,6 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - name: Ключ базы в хранилище Windows (DPAPI)
-        run: cargo test -p polka-secure
       - name: Пакеты интерфейса
         run: npm ci
         working-directory: app

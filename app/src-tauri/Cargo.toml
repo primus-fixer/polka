@@ -20,7 +20,12 @@ base64 = "0.22"
 getrandom = "0.3"
 polka-cloud = { path = "../../crates/polka-cloud" }
 polka-core = { path = "../../crates/polka-core" }
-polka-secure = { path = "../../crates/polka-secure" }
+# Общий модуль kit 0.1.0: ключ базы в хранилище системы, PIN-код и вход
+# (https://github.com/primus-fixer/kit). Ссылка — на коммит версии; когда у kit появится метка
+# v0.1.0, `rev` заменяется на `tag = "v0.1.0"`.
+kit-core = { git = "https://github.com/primus-fixer/kit", rev = "98f74d4a1520d41a47dedf9b4924d37a52319cc1" }
+kit-secure = { git = "https://github.com/primus-fixer/kit", rev = "98f74d4a1520d41a47dedf9b4924d37a52319cc1" }
+kit-tauri = { git = "https://github.com/primus-fixer/kit", rev = "98f74d4a1520d41a47dedf9b4924d37a52319cc1" }
 # Страница Яндекс ID, где создают пароль приложения для Диска.
 tauri-plugin-opener = "2"
 # Связь по Wi-Fi: адреса устройства в сети и QR-код со своим адресом и кодом связи.

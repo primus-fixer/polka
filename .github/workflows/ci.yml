@@ -29,7 +29,7 @@ jobs:
       - name: Интерфейс для моста (frontendDist)
         working-directory: app
         run: npm ci && npm run build
-      - run: cargo test -p polka-core -p polka-cloud -p polka-secure -p polka-app
+      - run: cargo test -p polka-core -p polka-cloud -p polka-app
 
   frontend:
     name: Интерфейс — сборка

@@ -13,7 +13,7 @@
 // На телефоне коннектора нет: там остаются только команды экрана.
 #![cfg_attr(not(desktop), allow(unused_imports, dead_code))]
 
-use crate::guard::LOCKED;
+use kit_tauri::guard::LOCKED;
 use crate::{err, tz_minutes, AppState, Res};
 use polka_core::catalog;
 use polka_core::db::Store;
