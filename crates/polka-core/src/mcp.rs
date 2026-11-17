@@ -1,16 +1,12 @@
-//! Протокол MCP (Model Context Protocol) для коннектора «Полки» к приложению Claude:
-//! JSON-RPC 2.0 построчно через stdio.
-//!
-//! Здесь только разбор и ответы: `initialize`, `ping`, `tools/list`, `tools/call`, а ещё
-//! доказательство ключа связи и файл расширения `.mcpb`. Сам вызов инструмента — снаружи:
-//! посредник `polka --mcp` передаёт его запущенной «Полке».
+//! Коннектор «Полки» к приложению Claude. Протокол MCP, доказательство ключа связи и файл расширения
+//! `.mcpb` — общие из kit (`kit_core::mcp`); здесь то, чем «Полка» отличается: имя, подсказка для Claude,
+//! строка ключа связи, описание расширения и её инструменты ([`crate::tools`]).
 
 use crate::tools;
-use serde_json::{json, Value};
-use std::io::Write;
+use kit_core::mcp::{self as kit, Extension, Server, Tool};
+use serde_json::Value;
 
-/// Версии протокола, которые понимает «Полка», — новая первой.
-pub const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+pub use kit::{bundle, VERSIONS};
 
 /// Подсказка для Claude: что это за данные и как с ними обращаться.
 pub const INSTRUCTIONS: &str = "«Полка» — личный список прочитанного и просмотренного: книги, фильмы и сериалы \
@@ -22,148 +18,63 @@ pub const INSTRUCTIONS: &str = "«Полка» — личный список п�
 Каждую запись человек видит в «Полке» и может отменить кнопкой «Вернуть». \
 Если «Полка» заблокирована или запись выключена, скажите человеку, что сделать в «Полке».";
 
-fn ok(id: &Value, result: Value) -> String {
-    json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
+/// Коннектор «Полки». Строку ключа связи менять нельзя: посредник прежней версии и запущенная «Полка»
+/// перестанут узнавать друг друга.
+pub const SERVER: Server = Server { name: "polka", title: "Полка", instructions: INSTRUCTIONS, link_personal: b"polka-link" };
+
+/// Расширение «Полки» для приложения Claude.
+pub const EXTENSION: Extension = Extension {
+    display_name: "Полка",
+    description: "Прочитанные книги, просмотренные фильмы и сериалы из «Полки»: полка, «Хочу», итоги года, цитаты. Запись — если она разрешена в «Полке».",
+    long_description: "Расширение запускает «Полку» на этом компьютере в режиме коннектора. Данные не уходят в интернет, кроме того, что Claude прочитает по вашей просьбе. Включается в «Полке»: Настройки → Claude.",
+    author: "Полка",
+    keywords: &["books", "films", "series", "reading"],
+    dir_env: "POLKA_DIR",
+};
+
+/// Инструменты «Полки» для протокола: удаляет только `delete_title`; повторять можно чтение,
+/// правку записи, отметку серий и цель.
+pub fn tools() -> Vec<Tool> {
+    tools::list()
+        .into_iter()
+        .map(|t| Tool {
+            destructive: t.name == "delete_title",
+            idempotent: matches!(t.name, "update_title" | "mark_episodes" | "set_goal"),
+            name: t.name,
+            title: t.title,
+            description: t.description,
+            input_schema: t.input_schema,
+            write: t.write,
+        })
+        .collect()
 }
 
-fn fail(id: &Value, code: i64, message: &str) -> String {
-    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }).to_string()
-}
-
-/// Доказательство ключа связи посредника (`polka --mcp`) и запущенной «Полки»: MAC от одноразового
-/// числа другой стороны. Сам ключ по сети не ходит, и программа, занявшая порт, ничего не узнает.
+/// Доказательство ключа связи посредника (`polka --mcp`) и запущенной «Полки».
 pub fn link_proof(token: &str, role: &str, nonce: &str) -> String {
-    use blake2::digest::consts::U32;
-    use blake2::digest::Mac;
-    // Ключ BLAKE2b — не длиннее 64 байт (ключ связи — 64 шестнадцатеричных знака).
-    if token.is_empty() || token.len() > 64 {
-        return String::new();
-    }
-    let Ok(mut mac) = blake2::Blake2bMac::<U32>::new_with_salt_and_personal(token.as_bytes(), &[], b"polka-link") else { return String::new() };
-    mac.update(role.as_bytes());
-    mac.update(b"|");
-    mac.update(nonce.as_bytes());
-    mac.finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect()
+    kit::link_proof(&SERVER, token, role, nonce)
 }
 
 /// Описание инструментов для `tools/list`.
 pub fn tool_list() -> Value {
-    let tools: Vec<Value> = tools::list()
-        .into_iter()
-        .map(|t| {
-            json!({
-                "name": t.name,
-                "title": t.title,
-                "description": t.description,
-                "inputSchema": t.input_schema,
-                "annotations": {
-                    "title": t.title,
-                    "readOnlyHint": !t.write,
-                    "destructiveHint": t.name == "delete_title",
-                    "idempotentHint": !t.write || matches!(t.name, "update_title" | "mark_episodes" | "set_goal"),
-                    "openWorldHint": false
-                }
-            })
-        })
-        .collect();
-    json!({ "tools": tools })
+    kit::tool_list(&tools())
 }
 
 /// Ответ на одну строку запроса; `None` — для уведомлений, на них не отвечают.
 /// `call(имя, аргументы)` выполняет инструмент: `Ok` — данные, `Err` — понятная человеку ошибка.
 pub fn handle(line: &str, version: &str, call: &mut dyn FnMut(&str, &Value) -> Result<Value, String>) -> Option<String> {
-    let msg: Value = match serde_json::from_str(line) {
-        Ok(v) => v,
-        Err(_) => return Some(fail(&Value::Null, -32700, "Parse error")),
-    };
-    if !msg.is_object() {
-        return Some(fail(&Value::Null, -32600, "Invalid Request"));
-    }
-    let method = msg.get("method").and_then(|m| m.as_str());
-    let id = msg.get("id").cloned();
-    let params = msg.get("params").cloned().unwrap_or_else(|| json!({}));
-    // Ответ клиента на наш запрос (мы их не шлём) или уведомление — молча.
-    let (Some(method), Some(id)) = (method, id) else { return None };
-    Some(match method {
-        "initialize" => {
-            let asked = params.get("protocolVersion").and_then(|v| v.as_str()).unwrap_or("");
-            let version_used = if VERSIONS.contains(&asked) { asked } else { VERSIONS[0] };
-            ok(
-                &id,
-                json!({
-                    "protocolVersion": version_used,
-                    "capabilities": { "tools": { "listChanged": false } },
-                    "serverInfo": { "name": "polka", "title": "Полка", "version": version },
-                    "instructions": INSTRUCTIONS
-                }),
-            )
-        }
-        "ping" => ok(&id, json!({})),
-        "tools/list" => ok(&id, tool_list()),
-        "tools/call" => {
-            let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            if tools::find(name).is_none() {
-                return Some(fail(&id, -32602, &format!("Unknown tool: {name}")));
-            }
-            let args = match params.get("arguments") {
-                None | Some(Value::Null) => json!({}),
-                Some(a) if a.is_object() => a.clone(),
-                Some(_) => return Some(fail(&id, -32602, "arguments must be an object")),
-            };
-            match call(name, &args) {
-                Ok(v) => ok(&id, json!({ "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }], "isError": false })),
-                Err(e) => ok(&id, json!({ "content": [{ "type": "text", "text": e }], "isError": true })),
-            }
-        }
-        "resources/list" => ok(&id, json!({ "resources": [] })),
-        "resources/templates/list" => ok(&id, json!({ "resourceTemplates": [] })),
-        "prompts/list" => ok(&id, json!({ "prompts": [] })),
-        _ => fail(&id, -32601, &format!("Method not found: {method}")),
-    })
+    kit::handle(&SERVER, &tools(), line, version, call)
 }
 
 /// Описание расширения для приложения Claude (`manifest.json` внутри `.mcpb`).
 /// `command` — полный путь к `polka.exe`, `dir` — папка данных «Полки», `platform` — win32, darwin или linux.
 pub fn manifest(version: &str, command: &str, dir: &str, platform: &str) -> Value {
-    // Путь может быть виндовым и там, где собирают проверки, — режем по обоим разделителям.
-    let entry = command.rsplit(['/', '\\']).next().filter(|n| !n.is_empty()).unwrap_or("polka");
-    json!({
-        "manifest_version": "0.3",
-        "name": "polka",
-        "display_name": "Полка",
-        "version": version,
-        "description": "Прочитанные книги, просмотренные фильмы и сериалы из «Полки»: полка, «Хочу», итоги года, цитаты. Запись — если она разрешена в «Полке».",
-        "long_description": "Расширение запускает «Полку» на этом компьютере в режиме коннектора. Данные не уходят в интернет, кроме того, что Claude прочитает по вашей просьбе. Включается в «Полке»: Настройки → Claude.",
-        "author": { "name": "Полка" },
-        "icon": "icon.png",
-        "server": {
-            "type": "binary",
-            "entry_point": entry,
-            "mcp_config": { "command": command, "args": ["--mcp"], "env": { "POLKA_DIR": dir } }
-        },
-        "tools": tools::list().iter().map(|t| json!({ "name": t.name, "description": t.title })).collect::<Vec<_>>(),
-        "compatibility": { "platforms": [platform] },
-        "keywords": ["books", "films", "series", "reading"],
-        "license": "Proprietary"
-    })
-}
-
-/// Файл расширения `.mcpb`: архив ZIP с `manifest.json` и значком.
-pub fn bundle(manifest: &Value, icon_png: &[u8]) -> Result<Vec<u8>, String> {
-    let err = |e: zip::result::ZipError| format!("расширение не собралось: {e}");
-    let mut zw = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    zw.start_file("manifest.json", opts).map_err(err)?;
-    zw.write_all(&serde_json::to_vec_pretty(manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    // PNG уже сжат — кладём как есть.
-    zw.start_file("icon.png", opts.compression_method(zip::CompressionMethod::Stored)).map_err(err)?;
-    zw.write_all(icon_png).map_err(|e| e.to_string())?;
-    Ok(zw.finish().map_err(err)?.into_inner())
+    kit::manifest(&SERVER, &EXTENSION, &tools(), version, command, dir, platform)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn link_proof_depends_on_key_role_and_nonce() {

@@ -990,7 +990,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1199,7 +1199,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2286,18 +2286,21 @@ dependencies = [
 
 [[package]]
 name = "kit-core"
-version = "0.1.0"
-source = "git+https://github.com/primus-fixer/kit?rev=98f74d4a1520d41a47dedf9b4924d37a52319cc1#98f74d4a1520d41a47dedf9b4924d37a52319cc1"
+version = "0.4.0"
+source = "git+https://github.com/primus-fixer/kit?rev=2869254ea0820dfa45cef690f95555db1661eb87#2869254ea0820dfa45cef690f95555db1661eb87"
 dependencies = [
  "argon2",
+ "blake2",
  "getrandom 0.3.4",
+ "serde_json",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]
 name = "kit-secure"
-version = "0.1.0"
-source = "git+https://github.com/primus-fixer/kit?rev=98f74d4a1520d41a47dedf9b4924d37a52319cc1#98f74d4a1520d41a47dedf9b4924d37a52319cc1"
+version = "0.4.0"
+source = "git+https://github.com/primus-fixer/kit?rev=2869254ea0820dfa45cef690f95555db1661eb87#2869254ea0820dfa45cef690f95555db1661eb87"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2308,8 +2311,8 @@ dependencies = [
 
 [[package]]
 name = "kit-tauri"
-version = "0.1.0"
-source = "git+https://github.com/primus-fixer/kit?rev=98f74d4a1520d41a47dedf9b4924d37a52319cc1#98f74d4a1520d41a47dedf9b4924d37a52319cc1"
+version = "0.4.0"
+source = "git+https://github.com/primus-fixer/kit?rev=2869254ea0820dfa45cef690f95555db1661eb87#2869254ea0820dfa45cef690f95555db1661eb87"
 dependencies = [
  "kit-core",
  "kit-secure",
@@ -3145,7 +3148,7 @@ dependencies = [
 
 [[package]]
 name = "polka-app"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -3170,7 +3173,7 @@ dependencies = [
 
 [[package]]
 name = "polka-cloud"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "base64 0.22.1",
  "polka-core",
@@ -3181,7 +3184,7 @@ dependencies = [
 
 [[package]]
 name = "polka-core"
-version = "0.11.2"
+version = "0.11.3"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -3189,6 +3192,7 @@ dependencies = [
  "chacha20poly1305",
  "encoding_rs",
  "getrandom 0.3.4",
+ "kit-core",
  "lopdf",
  "miniz_oxide 0.8.9",
  "rusqlite",
@@ -3590,7 +3594,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4638,7 +4642,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5426,7 +5430,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5752,7 +5756,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
 dependencies = [
  "cfg-if",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
