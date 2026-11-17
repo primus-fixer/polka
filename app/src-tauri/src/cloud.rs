@@ -581,7 +581,7 @@ fn run_round(app: &AppHandle) -> Option<CloudFail> {
     let mut last_emit = Instant::now();
     let mut result: polka_core::Result<Report> = Ok(Report::default());
     if let Some(kf_text) = &c.keyfile {
-        match KeyFile::parse(kf_text.as_bytes()).and_then(|kf| pc::put_key_file(&conn, &c.key, &kf)) {
+        match pc::parse_key_file(kf_text.as_bytes()).and_then(|kf| pc::put_key_file(&conn, &c.key, &kf)) {
             Ok(()) => {
                 if let Ok(st) = state.store.lock() {
                     // Пока шёл обмен, пароль могли сменить ещё раз — тогда ждёт уже новый ключ.

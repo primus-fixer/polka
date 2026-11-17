@@ -1,6 +1,7 @@
 //! Запросы к облаку: таймауты, пределы ответа и понятные ошибки.
 
-use polka_core::error::{CloudFail, Error, Result};
+use kit_core::cloud::CloudFail;
+use kit_core::{Error, Result};
 use std::time::Duration;
 
 /// Сейчас: секунды Unix.

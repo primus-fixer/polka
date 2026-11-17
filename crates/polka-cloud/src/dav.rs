@@ -10,7 +10,8 @@ use crate::http::{enc, fail, no_space, odd, server, Body, Http, Resp};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use polka_core::cloud::{Cloud, Dir, Entry, KEY_FILE};
-use polka_core::error::{CloudFail, Error, Result};
+use kit_core::cloud::CloudFail;
+use kit_core::{Error, Result};
 use std::cell::RefCell;
 
 /// Яндекс Диск по WebDAV.
@@ -174,7 +175,7 @@ impl Dav {
 
     /// После удаления данных из облака: убирает пустые папки «Полки». Чужие файлы не трогает.
     pub fn tidy(&self) -> Result<()> {
-        for dir in [Dir::Events, Dir::Blobs, Dir::Books, Dir::Root] {
+        for dir in [Dir::Events, Dir::Blobs, Dir::Files, Dir::Root] {
             let Some(items) = self.propfind(&self.folder_url(dir), "1", LIST)? else { continue };
             // Сама папка — первый ответ; другого ничего нет — папка пустая.
             if items.len() <= 1 {

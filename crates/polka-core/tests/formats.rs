@@ -29,7 +29,7 @@ const DEVICE: &str = "aaaa";
 const PASSWORD: &str = "книги на даче";
 /// «Сейчас» для образцов: 17 ноября 2026 года.
 const NOW: i64 = 1_794_900_000;
-const DIRS: [Dir; 4] = [Dir::Root, Dir::Events, Dir::Blobs, Dir::Books];
+const DIRS: [Dir; 4] = [Dir::Root, Dir::Events, Dir::Blobs, Dir::Files];
 const SETTING: &str = "setting";
 /// Виды записей, которые лежат в образце.
 const KINDS: [&str; 6] = [KIND, GOAL_KIND, SETTING, FILE, READING, MARK];
