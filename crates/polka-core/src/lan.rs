@@ -19,7 +19,7 @@
 use crate::db::Store;
 use crate::error::{Error, LanFail, Result};
 use crate::pairing::normalize_code;
-use crate::sync::{prepare, run_client, run_server, Msg, SyncReport, Wire, APP_VERSION, MAX_FRAME};
+use crate::sync::{prepare, run_client, run_server, Msg, MsgWire, SyncReport, Wire, APP_VERSION, MAX_FRAME};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use blake2::digest::consts::U32;
@@ -169,9 +169,8 @@ impl SessionWire {
 }
 
 impl Wire for SessionWire {
-    fn send(&mut self, msg: &Msg) -> Result<()> {
-        let plain = serde_json::to_vec(msg)?;
-        let ct = self.tx.encrypt(&nonce(self.tx_n), Payload { msg: &plain, aad: MAGIC }).map_err(|_| Error::Decrypt)?;
+    fn send_bytes(&mut self, plain: &[u8]) -> kit_core::Result<()> {
+        let ct = self.tx.encrypt(&nonce(self.tx_n), Payload { msg: plain, aad: MAGIC }).map_err(|_| kit_core::Error::Decrypt)?;
         self.tx_n += 1;
         self.s.write_all(&(ct.len() as u32).to_be_bytes())?;
         self.s.write_all(&ct)?;
@@ -179,22 +178,22 @@ impl Wire for SessionWire {
         Ok(())
     }
 
-    fn recv_max(&mut self, max: usize) -> Result<Msg> {
+    fn recv_bytes(&mut self, max: usize) -> kit_core::Result<Vec<u8>> {
         let mut len = [0u8; 4];
         self.s.read_exact(&mut len)?;
         let len = u32::from_be_bytes(len) as usize;
         if len > max.min(MAX_FRAME) {
-            return Err(Error::Format("слишком большой пакет".into()));
+            return Err(kit_core::Error::Format("слишком большой пакет".into()));
         }
         // Память — по мере прихода данных, а не сразу на объявленную длину: подставной не займёт её словом.
         let mut buf = Vec::new();
         (&mut self.s).take(len as u64).read_to_end(&mut buf)?;
         if buf.len() != len {
-            return Err(Error::Io(std::io::ErrorKind::UnexpectedEof.into()));
+            return Err(kit_core::Error::Io(std::io::ErrorKind::UnexpectedEof.into()));
         }
-        let plain = self.rx.decrypt(&nonce(self.rx_n), Payload { msg: &buf, aad: MAGIC }).map_err(|_| Error::Decrypt)?;
+        let plain = self.rx.decrypt(&nonce(self.rx_n), Payload { msg: &buf, aad: MAGIC }).map_err(|_| kit_core::Error::Decrypt)?;
         self.rx_n += 1;
-        Ok(serde_json::from_slice(&plain)?)
+        Ok(plain)
     }
 
     fn stream(&self) -> &TcpStream {
