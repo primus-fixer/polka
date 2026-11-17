@@ -30,6 +30,9 @@ pub mod tools;
 pub use date::Date;
 pub use error::{Error, Result};
 
+/// Как «Полка» называется в сообщениях — для общего модуля kit (копии, коннектор, вход).
+pub const NAMES: kit_core::AppNames = kit_core::AppNames { id: "polka", name: "Полка", name_acc: "Полку", name_gen: "Полки", feminine: true };
+
 /// Новый номер записи: 16 шестнадцатеричных знаков.
 pub fn new_id() -> Result<String> {
     let mut b = [0u8; 8];

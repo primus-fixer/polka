@@ -91,3 +91,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub(crate) fn bad(msg: impl Into<String>) -> Error {
     Error::Format(msg.into())
 }
+
+/// Ошибки общего модуля kit — теми же словами, что и раньше в «Полке».
+impl From<kit_core::Error> for Error {
+    fn from(e: kit_core::Error) -> Self {
+        use kit_core::Error as K;
+        match e {
+            K::Backup(s) => Error::Backup(s),
+            K::BackupPassword => Error::BackupPassword,
+            K::Random(s) => Error::Random(s),
+            K::Io(e) => Error::Io(e),
+            K::Json(e) => Error::Json(e),
+            other => Error::Format(other.to_string()),
+        }
+    }
+}

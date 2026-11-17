@@ -5,7 +5,7 @@
 //! а новый телефон получает всё обратно, когда его свяжут с компьютером.
 
 use crate::{err, put_setting, setting, AppState, Res, APP_VERSION};
-use polka_core::backup::{self, BackupKey, Checked, MadeBy, Manifest, Reader, Writer};
+use polka_core::backup::{self, BackupKey, Checked, MadeBy, Reader, Writer};
 use polka_core::db::Store;
 use polka_core::model::{Title, KIND};
 use polka_core::Date;
@@ -279,10 +279,10 @@ fn make(app: &AppHandle, auto: bool) -> Res<Last> {
         let blobs = st.present_blobs().map_err(err)?;
         let by = MadeBy { app: APP_VERSION.into(), created: at, device: state.name.clone(), device_id: st.device().to_string() };
         let titles = st.list::<Title>(KIND).map_err(err)?.len() as u64;
-        let mut manifest = Manifest::new(&by, events.len() as u64, blobs.len() as u64, titles);
+        let mut manifest = backup::manifest(&by, events.len() as u64, blobs.len() as u64, titles, 0);
         // Файлы книг — если так выбрано в настройках.
         let books = if polka_core::files::backup_on(&st) { polka_core::files::present(&st).map_err(err)? } else { Vec::new() };
-        manifest.books = books.len() as u64;
+        manifest.counts.books = books.len() as u64;
         (key, dir_of(app, &st).0, events, blobs, books, manifest, crate::tz_minutes(&st))
     };
     check_writable(&dir)?;
@@ -488,7 +488,7 @@ pub async fn backup_inspect(app: AppHandle, id: String, password: String) -> Res
         let bytes = std::fs::metadata(&path).map_err(|_| "Файл копии не загружен — выберите его снова".to_string())?.len();
         let c = check_file(&state, &path, &password)?;
         let m = c.manifest;
-        Ok(Info { created: m.created, device: m.device, app: m.app, titles: m.titles, events: c.events, blobs: c.blobs, books: c.books, bytes })
+        Ok(Info { created: m.created, device: m.device, app: m.app, titles: m.counts.titles, events: c.events, blobs: c.blobs, books: c.books, bytes })
     })
     .await
     .map_err(err)?
