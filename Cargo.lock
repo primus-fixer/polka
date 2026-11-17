@@ -2287,7 +2287,7 @@ dependencies = [
 [[package]]
 name = "kit-cloud"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
+source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
 dependencies = [
  "base64 0.22.1",
  "kit-core",
@@ -2299,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "kit-core"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
+source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2318,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "kit-secure"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
+source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2330,10 +2330,11 @@ dependencies = [
 [[package]]
 name = "kit-tauri"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=b44b2f377f44a7ce4039066b52247c1b18263a38#b44b2f377f44a7ce4039066b52247c1b18263a38"
+source = "git+https://github.com/primus-fixer/kit?rev=b537338f2d8ad77bf6f56f9cb526289079eed9aa#b537338f2d8ad77bf6f56f9cb526289079eed9aa"
 dependencies = [
  "base64 0.22.1",
  "if-addrs",
+ "kit-cloud",
  "kit-core",
  "kit-secure",
  "qrcode",
@@ -2341,6 +2342,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-plugin-biometric",
+ "tauri-plugin-opener",
 ]
 
 [[package]]
@@ -3174,13 +3176,11 @@ version = "0.11.8"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
- "if-addrs",
  "kit-core",
  "kit-secure",
  "kit-tauri",
  "polka-cloud",
  "polka-core",
- "qrcode",
  "serde",
  "serde_json",
  "tauri",

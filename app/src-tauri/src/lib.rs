@@ -573,6 +573,7 @@ pub fn run() {
             app.manage(guard.clone());
             #[cfg(desktop)]
             let claude_dir = dir.clone();
+            app.manage(cloud::Sky::new(cloud::settings(), store.clone(), None));
             app.manage(lan::Wifi::new(&polka_core::lan::LAN, &names::KEYS, store.clone(), me.id.clone(), device_name()));
             app.manage(AppState { store, dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), name: device_name(), guard });
             app.manage(reader::Books::default());
