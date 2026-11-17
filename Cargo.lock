@@ -2286,8 +2286,8 @@ dependencies = [
 
 [[package]]
 name = "kit-core"
-version = "0.8.0"
-source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
+version = "0.9.0"
+source = "git+https://github.com/primus-fixer/kit?rev=0e24907e8d477f356f2db5c8c35ed601bf8c5622#0e24907e8d477f356f2db5c8c35ed601bf8c5622"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2296,14 +2296,15 @@ dependencies = [
  "getrandom 0.3.4",
  "serde",
  "serde_json",
+ "spake2",
  "thiserror 2.0.21",
  "zip",
 ]
 
 [[package]]
 name = "kit-secure"
-version = "0.8.0"
-source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
+version = "0.9.0"
+source = "git+https://github.com/primus-fixer/kit?rev=0e24907e8d477f356f2db5c8c35ed601bf8c5622#0e24907e8d477f356f2db5c8c35ed601bf8c5622"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2314,8 +2315,8 @@ dependencies = [
 
 [[package]]
 name = "kit-tauri"
-version = "0.8.0"
-source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
+version = "0.9.0"
+source = "git+https://github.com/primus-fixer/kit?rev=0e24907e8d477f356f2db5c8c35ed601bf8c5622#0e24907e8d477f356f2db5c8c35ed601bf8c5622"
 dependencies = [
  "kit-core",
  "kit-secure",
@@ -3151,7 +3152,7 @@ dependencies = [
 
 [[package]]
 name = "polka-app"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -3176,7 +3177,7 @@ dependencies = [
 
 [[package]]
 name = "polka-cloud"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "base64 0.22.1",
  "polka-core",
@@ -3187,7 +3188,7 @@ dependencies = [
 
 [[package]]
 name = "polka-core"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -3202,7 +3203,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "spake2",
  "tempfile",
  "thiserror 2.0.21",
  "ureq",
