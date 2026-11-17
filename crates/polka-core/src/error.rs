@@ -102,6 +102,9 @@ impl From<kit_core::Error> for Error {
             K::Random(s) => Error::Random(s),
             K::Io(e) => Error::Io(e),
             K::Json(e) => Error::Json(e),
+            K::Format(s) | K::Store(s) => Error::Format(s),
+            K::Peer(s) => Error::Peer(s),
+            K::Decrypt => Error::Decrypt,
             other => Error::Format(other.to_string()),
         }
     }

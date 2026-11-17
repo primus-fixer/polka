@@ -2286,8 +2286,8 @@ dependencies = [
 
 [[package]]
 name = "kit-core"
-version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
+version = "0.8.0"
+source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2302,8 +2302,8 @@ dependencies = [
 
 [[package]]
 name = "kit-secure"
-version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
+version = "0.8.0"
+source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2314,8 +2314,8 @@ dependencies = [
 
 [[package]]
 name = "kit-tauri"
-version = "0.7.0"
-source = "git+https://github.com/primus-fixer/kit?rev=6d19930282973c7fbae0aa240a27baedc91530b1#6d19930282973c7fbae0aa240a27baedc91530b1"
+version = "0.8.0"
+source = "git+https://github.com/primus-fixer/kit?rev=125a96f3f4f10b932231171dcbf31ad929a46403#125a96f3f4f10b932231171dcbf31ad929a46403"
 dependencies = [
  "kit-core",
  "kit-secure",
@@ -3151,7 +3151,7 @@ dependencies = [
 
 [[package]]
 name = "polka-app"
-version = "0.11.5"
+version = "0.11.6"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -3176,7 +3176,7 @@ dependencies = [
 
 [[package]]
 name = "polka-cloud"
-version = "0.11.5"
+version = "0.11.6"
 dependencies = [
  "base64 0.22.1",
  "polka-core",
@@ -3187,7 +3187,7 @@ dependencies = [
 
 [[package]]
 name = "polka-core"
-version = "0.11.5"
+version = "0.11.6"
 dependencies = [
  "argon2",
  "base64 0.22.1",
