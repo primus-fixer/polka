@@ -6,6 +6,8 @@ node_modules
 *.db
 *.db-wal
 *.db-shm
+# Образцы форматов для проверок — в репозитории.
+!crates/*/tests/fixtures/**/*.db
 cover-report.html
 cover-report.json
 
