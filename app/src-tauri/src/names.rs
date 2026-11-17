@@ -7,7 +7,7 @@
 use kit_core::AppNames;
 use kit_secure::KeyNames;
 
-pub const APP: AppNames = AppNames { id: "polka", name: "Полка", name_acc: "Полку", name_gen: "Полки" };
+pub const APP: AppNames = AppNames { id: "polka", name: "Полка", name_acc: "Полку", name_gen: "Полки", feminine: true };
 
 pub const KEYS: KeyNames = KeyNames { dpapi_entropy: b"polka-db-key-v1", dpapi_label: "Polka", keystore_alias: "polka-db-key" };
 

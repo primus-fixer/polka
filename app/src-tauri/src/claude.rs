@@ -1,11 +1,11 @@
-//! Коннектор для приложения Claude на компьютере — как в «Кармане».
+//! Коннектор для приложения Claude на компьютере.
 //!
 //! Приложение Claude запускает `polka --mcp` (расширение `.mcpb`) и говорит с ним по протоколу MCP
 //! через stdio. Посредник сам отвечает на `initialize` и `tools/list`, а вызовы инструментов передаёт
 //! запущенной «Полке» по 127.0.0.1 — запросы из сети «Полка» не принимает. Ключ связи новый при
 //! каждом запуске и лежит в папке данных; по сети он не ходит: стороны доказывают друг другу, что знают
-//! его (MAC от одноразовых чисел). Программа, занявшая порт закрытой «Полки», не получит ни ключа,
-//! ни запроса. Если «Полка» закрыта, посредник её запускает (на Windows).
+//! его (MAC от одноразовых чисел). Если «Полка» закрыта, посредник её запускает (на Windows).
+//! Посредник и приём запросов — общие из kit (`kit_core::link`); здесь — инструменты «Полки».
 //!
 //! Чтение — когда подключение включено в настройках. Запись — только если она отдельно разрешена;
 //! каждое действие Claude видно в «Полке» и отменяется кнопкой «Вернуть».
@@ -19,57 +19,16 @@ use polka_core::catalog;
 use polka_core::db::Store;
 use polka_core::model::Kind;
 use polka_core::tools::{self, Item, Lookup};
+use kit_core::link::{self, Connector};
 use polka_core::{mcp, now_secs, Date};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-/// Где запущенная «Полка» ждёт посредника: порт и ключ.
-const LINK_FILE: &str = "claude.json";
 const META_ON: &str = "claude.on";
 const META_WRITE: &str = "claude.write";
-/// Запрос посредника — одна строка JSON, не больше.
-const MAX_REQUEST: u64 = 1 << 20;
-
-#[derive(Serialize, Deserialize)]
-struct Link {
-    port: u16,
-    token: String,
-    pid: u32,
-    app: String,
-}
-
-/// Запрос посредника — после того как «Полка» доказала, что знает ключ связи.
-#[derive(Serialize, Deserialize)]
-struct Request {
-    /// Доказательство посредника: MAC от одноразового числа «Полки».
-    auth: String,
-    tool: String,
-    #[serde(default)]
-    args: Value,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Reply {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    ok: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    err: Option<String>,
-}
-
-/// Одноразовое число для проверки: 32 случайных байта.
-fn nonce() -> Option<String> {
-    polka_core::pairing::random_key().ok().map(|k| k.iter().map(|b| format!("{b:02x}")).collect())
-}
-
-fn valid_nonce(n: &str) -> bool {
-    n.len() == 64 && n.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
 /// Действие Claude, которое можно отменить.
 struct Action {
     id: u64,
@@ -89,11 +48,6 @@ fn local_today(st: &Store) -> Date {
 
 fn meta_flag(st: &Store, key: &str) -> bool {
     st.meta(key).ok().flatten().is_some_and(|v| v == "1")
-}
-
-/// Ключ без тайминговых подсказок: сравнение всегда до конца.
-fn same(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// Окно «Полки» — на передний план: войти по PIN-коду или открыть второй запуск. На телефоне окна
@@ -195,222 +149,25 @@ fn execute(app: &AppHandle, tool: &str, args: &Value) -> Result<Value, String> {
     Ok(result)
 }
 
-// ——— Приём запросов посредника (компьютер) ———
+// ——— Связь с посредником `polka --mcp` (компьютер) ———
 
-/// «Полка»: посредник прислал своё одноразовое число — отвечаем доказательством и своим числом;
-/// дальше принимаем запрос, только если посредник доказал, что знает ключ. `None` — связь оборвалась.
-fn accept(stream: &std::net::TcpStream, token: &str) -> Option<Result<Request, String>> {
-    let mut reader = BufReader::new(stream.take(MAX_REQUEST));
-    let mut line = String::new();
-    if reader.read_line(&mut line).ok()? == 0 {
-        return None;
-    }
-    let hello: Value = match serde_json::from_str(&line) {
-        Ok(v) => v,
-        Err(_) => return Some(Err("неверный запрос".into())),
-    };
-    let Some(theirs) = hello["hello"].as_str().filter(|n| valid_nonce(n)) else { return Some(Err("неверный запрос".into())) };
-    let Some(mine) = nonce() else { return Some(Err("нет случайных чисел".into())) };
-    let mut out = stream;
-    writeln!(out, "{}", json!({ "proof": mcp::link_proof(token, "polka", theirs), "nonce": mine })).ok()?;
-    line.clear();
-    if reader.read_line(&mut line).ok()? == 0 {
-        return None;
-    }
-    Some(match serde_json::from_str::<Request>(&line) {
-        Ok(r) if same(&r.auth, &mcp::link_proof(token, "bridge", &mine)) => Ok(r),
-        Ok(_) => Err("неверный ключ".into()),
-        Err(_) => Err("неверный запрос".into()),
-    })
-}
+/// Коннектор «Полки» для связи посредника с запущенной «Полкой». Идентификатор — имя папки данных
+/// (`identifier` в `tauri.conf.json`); его, как и строку ключа связи, менять нельзя.
+pub const CONNECTOR: Connector = Connector { server: mcp::SERVER, extension: mcp::EXTENSION, names: crate::names::APP, identifier: "io.github.primusfixer.polka" };
 
-#[cfg(desktop)]
-fn serve(app: &AppHandle, stream: std::net::TcpStream, token: &str) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
-    let reply = match accept(&stream, token) {
-        None => return,
-        Some(Ok(r)) => match execute(app, &r.tool, &r.args) {
-            Ok(v) => Reply { ok: Some(v), err: None },
-            Err(e) => Reply { ok: None, err: Some(e) },
-        },
-        Some(Err(e)) => Reply { ok: None, err: Some(e) },
-    };
-    let mut out = &stream;
-    let _ = writeln!(out, "{}", serde_json::to_string(&reply).unwrap_or_default());
-}
-
-/// При запуске на компьютере: ждём посредника на 127.0.0.1 и записываем, где нас искать.
+/// При запуске на компьютере — после того как база открыта: ждём посредника на 127.0.0.1 и записываем,
+/// где нас искать.
 #[cfg(desktop)]
 pub fn start(app: AppHandle, data_dir: PathBuf) {
-    std::thread::spawn(move || {
-        let listener = match std::net::TcpListener::bind(("127.0.0.1", 0)) {
-            Ok(l) => l,
-            Err(e) => return eprintln!("коннектор для Claude: {e}"),
-        };
-        let Ok(port) = listener.local_addr().map(|a| a.port()) else { return };
-        let Ok(key) = polka_core::pairing::random_key() else { return };
-        let token: String = key.iter().map(|b| format!("{b:02x}")).collect();
-        let link = Link { port, token: token.clone(), pid: std::process::id(), app: crate::APP_VERSION.into() };
-        if let Err(e) = write_link(&data_dir, &link) {
-            return eprintln!("коннектор для Claude: {e}");
-        }
-        for stream in listener.incoming().flatten() {
-            let (app, token) = (app.clone(), token.clone());
-            std::thread::spawn(move || serve(&app, stream, &token));
-        }
-    });
-}
-
-#[cfg(desktop)]
-fn write_link(dir: &Path, link: &Link) -> std::io::Result<()> {
-    let path = dir.join(LINK_FILE);
-    let tmp = dir.join(format!("{LINK_FILE}.tmp"));
-    std::fs::write(&tmp, serde_json::to_vec(link)?)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    if let Err(e) = link::listen(&CONNECTOR, &data_dir, crate::APP_VERSION, move |tool, args| execute(&app, tool, args)) {
+        eprintln!("коннектор для Claude: {e}");
     }
-    std::fs::rename(tmp, path)
-}
-
-// ——— Посредник: `polka --mcp` ———
-
-/// Папка данных «Полки» — та же, что у запущенного приложения.
-#[cfg(desktop)]
-fn data_dir() -> PathBuf {
-    if let Some(d) = std::env::var_os("POLKA_DIR").filter(|d| !d.is_empty()) {
-        return PathBuf::from(d);
-    }
-    let base = if cfg!(windows) {
-        std::env::var_os("APPDATA").map(PathBuf::from)
-    } else if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
-    } else {
-        std::env::var_os("XDG_DATA_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-    };
-    base.unwrap_or_default().join("io.github.primusfixer.polka")
-}
-
-#[cfg(desktop)]
-enum CallError {
-    /// «Полка» не запущена (или ещё не успела открыться).
-    NotRunning,
-    Failed(String),
-}
-
-#[cfg(desktop)]
-fn call_app(dir: &Path, tool: &str, args: &Value) -> Result<Value, CallError> {
-    let link: Link = std::fs::read(dir.join(LINK_FILE)).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or(CallError::NotRunning)?;
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], link.port));
-    let stream = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)).map_err(|_| CallError::NotRunning)?;
-    // Новая запись ищет обложку в каталогах — это дольше обычного запроса.
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(120)));
-    talk(&stream, &link.token, tool, args)
-}
-
-/// Посредник: сначала «Полка» доказывает, что знает ключ связи, потом — запрос с доказательством
-/// посредника. Если на порту не «Полка» (порт занят другой программой), запрос не уходит.
-#[cfg(desktop)]
-fn talk(stream: &std::net::TcpStream, token: &str, tool: &str, args: &Value) -> Result<Value, CallError> {
-    let mine = nonce().ok_or_else(|| CallError::Failed("нет случайных чисел".into()))?;
-    let mut out = stream;
-    writeln!(out, "{}", json!({ "hello": mine })).map_err(|_| CallError::NotRunning)?;
-    let mut reader = BufReader::new(stream.take(64 << 20));
-    let mut line = String::new();
-    reader.read_line(&mut line).map_err(|_| CallError::NotRunning)?;
-    let challenge: Value = serde_json::from_str(&line).map_err(|_| CallError::NotRunning)?;
-    if let Some(e) = challenge["err"].as_str() {
-        return Err(CallError::Failed(format!("«Полка» не приняла запрос ({e}) — перезапустите приложение Claude и «Полку»")));
-    }
-    let proof = challenge["proof"].as_str().unwrap_or_default();
-    let Some(theirs) = challenge["nonce"].as_str().filter(|n| valid_nonce(n)) else { return Err(CallError::NotRunning) };
-    if proof.is_empty() || !same(proof, &mcp::link_proof(token, "polka", &mine)) {
-        // На порту не «Полка»: ни ключа, ни запроса ему не отдаём.
-        return Err(CallError::NotRunning);
-    }
-    let req = Request { auth: mcp::link_proof(token, "bridge", theirs), tool: tool.to_string(), args: args.clone() };
-    writeln!(out, "{}", serde_json::to_string(&req).map_err(|e| CallError::Failed(e.to_string()))?).map_err(|_| CallError::NotRunning)?;
-    line.clear();
-    reader.read_line(&mut line).map_err(|e| CallError::Failed(format!("«Полка» не ответила: {e}")))?;
-    let reply: Reply = serde_json::from_str(&line).map_err(|_| CallError::Failed("«Полка» ответила непонятно — обновите её".into()))?;
-    match (reply.ok, reply.err) {
-        (Some(v), _) => Ok(v),
-        (None, Some(e)) => Err(CallError::Failed(e)),
-        _ => Err(CallError::Failed("пустой ответ «Полки»".into())),
-    }
-}
-
-/// Запустить «Полку» отдельно от приложения Claude (чтобы она не закрылась вместе с ним).
-#[cfg(desktop)]
-fn launch() -> bool {
-    let Ok(exe) = std::env::current_exe() else { return false };
-    let mut cmd = std::process::Command::new(&exe);
-    cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NEW_PROCESS_GROUP);
-        cmd.spawn().is_ok() || {
-            // Если выйти из задания приложения Claude нельзя — обычный запуск.
-            let mut plain = std::process::Command::new(&exe);
-            plain.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-            plain.creation_flags(CREATE_NEW_PROCESS_GROUP);
-            plain.spawn().is_ok()
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = cmd;
-        false
-    }
-}
-
-#[cfg(desktop)]
-fn forward(dir: &Path, tool: &str, args: &Value) -> Result<Value, String> {
-    match call_app(dir, tool, args) {
-        Ok(v) => return Ok(v),
-        Err(CallError::Failed(e)) => return Err(e),
-        Err(CallError::NotRunning) => {}
-    }
-    // Запуск — только на Windows: второй запуск лишь открывает уже работающую «Полку».
-    if !cfg!(windows) || !launch() {
-        return Err("«Полка» не запущена: откройте её на этом компьютере и повторите запрос.".into());
-    }
-    let started = std::time::Instant::now();
-    while started.elapsed() < Duration::from_secs(40) {
-        std::thread::sleep(Duration::from_millis(400));
-        match call_app(dir, tool, args) {
-            Ok(v) => return Ok(v),
-            Err(CallError::Failed(e)) => return Err(e),
-            Err(CallError::NotRunning) => {}
-        }
-    }
-    Err("«Полка» не открылась за 40 секунд: откройте её вручную и повторите запрос.".into())
 }
 
 /// `polka --mcp`: MCP по stdio для приложения Claude. Код выхода — 0, когда приложение Claude закрыло поток.
 #[cfg(desktop)]
 pub fn relay() -> i32 {
-    let dir = data_dir();
-    let stdin = std::io::stdin();
-    let mut out = std::io::stdout().lock();
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else { return 1 };
-        if line.trim().is_empty() {
-            continue;
-        }
-        let reply = mcp::handle(&line, crate::APP_VERSION, &mut |tool, args| forward(&dir, tool, args));
-        if let Some(r) = reply {
-            if writeln!(out, "{r}").and_then(|_| out.flush()).is_err() {
-                return 1;
-            }
-        }
-    }
-    0
+    link::relay(&CONNECTOR, &mcp::tools(), crate::APP_VERSION)
 }
 
 // ——— Команды экрана ———
@@ -528,87 +285,16 @@ pub fn claude_bundle(app: AppHandle, state: State<AppState>, open: bool) -> Res<
 mod tests {
     use super::*;
 
+    /// Строки связи — те же, что у «Полки» до kit: посредник прежней версии найдёт папку данных
+    /// и узнает запущенную «Полку».
     #[test]
-    fn token_compare() {
-        assert!(same("abc", "abc"));
-        assert!(!same("abc", "abd") && !same("abc", "abcd"));
-    }
-
-    /// «Полка» на 127.0.0.1: принимает одно подключение и отвечает эхом запроса.
-    fn fake_polka(token: &'static str) -> (u16, std::thread::JoinHandle<Option<Result<Request, String>>>) {
-        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = l.local_addr().unwrap().port();
-        let h = std::thread::spawn(move || {
-            let (stream, _) = l.accept().unwrap();
-            let got = accept(&stream, token);
-            let reply = match &got {
-                Some(Ok(r)) => Reply { ok: Some(json!({ "tool": r.tool, "args": r.args })), err: None },
-                Some(Err(e)) => Reply { ok: None, err: Some(e.clone()) },
-                None => return got,
-            };
-            let mut out = &stream;
-            writeln!(out, "{}", serde_json::to_string(&reply).unwrap()).unwrap();
-            got
-        });
-        (port, h)
-    }
-
-    fn connect(port: u16) -> std::net::TcpStream {
-        let s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        s
-    }
-
-    const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-
-    #[cfg(desktop)]
-    #[test]
-    fn bridge_and_polka_prove_the_key_without_sending_it() {
-        let (port, h) = fake_polka(KEY);
-        let v = talk(&connect(port), KEY, "summary", &json!({ "x": 1 })).ok().unwrap();
-        assert_eq!(v, json!({ "tool": "summary", "args": { "x": 1 } }));
-        assert!(matches!(h.join().unwrap(), Some(Ok(_))));
-        // Посредник с чужим ключом: доказательство «Полки» не сходится — посредник сам ничего не отправил.
-        let (port, h) = fake_polka(KEY);
-        let r = talk(&connect(port), &"f".repeat(64), "summary", &json!({}));
-        assert!(matches!(r, Err(CallError::NotRunning)));
-        assert!(h.join().unwrap().is_none(), "запрос не ушёл");
-    }
-
-    #[cfg(desktop)]
-    #[test]
-    fn a_program_on_the_port_gets_neither_key_nor_request() {
-        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let port = l.local_addr().unwrap().port();
-        let h = std::thread::spawn(move || {
-            let (stream, _) = l.accept().unwrap();
-            let mut seen = String::new();
-            let mut reader = BufReader::new(&stream);
-            reader.read_line(&mut seen).unwrap();
-            // Самозванец отвечает как умеет — ключа он не знает.
-            let mut out = &stream;
-            writeln!(out, "{}", json!({ "proof": "00".repeat(32), "nonce": "11".repeat(32) })).unwrap();
-            let mut rest = String::new();
-            let _ = reader.read_line(&mut rest);
-            seen + &rest
-        });
-        let r = talk(&connect(port), KEY, "add_title", &json!({ "title": "Щегол" }));
-        assert!(matches!(r, Err(CallError::NotRunning)));
-        let seen = h.join().unwrap();
-        assert!(seen.contains("hello") && !seen.contains(KEY) && !seen.contains("Щегол") && !seen.contains("auth"), "{seen}");
-    }
-
-    #[test]
-    fn a_bridge_without_the_key_is_refused() {
-        let (port, h) = fake_polka(KEY);
-        let s = connect(port);
-        let mut out = &s;
-        // Сразу запрос, без приветствия и доказательства.
-        writeln!(out, "{}", json!({ "auth": "00", "tool": "summary", "args": {} })).unwrap();
-        let mut line = String::new();
-        BufReader::new(&s).read_line(&mut line).unwrap();
-        assert!(line.contains("неверный запрос"), "{line}");
-        assert!(matches!(h.join().unwrap(), Some(Err(_))));
+    fn connector_is_the_same_as_before_kit() {
+        assert_eq!(CONNECTOR.server.name, "polka");
+        assert_eq!(CONNECTOR.server.link_personal, b"polka-link");
+        assert_eq!(CONNECTOR.extension.dir_env, "POLKA_DIR");
+        assert_eq!(CONNECTOR.identifier, "io.github.primusfixer.polka");
+        assert_eq!(link::LINK_FILE, "claude.json");
+        assert!(CONNECTOR.names.feminine, "«Полка» не запущена, откройте её");
     }
 
     /// Посредник находит «Полку» по файлу связи в папке данных и получает ответ инструмента из базы.
@@ -620,30 +306,21 @@ mod tests {
         let mut t = polka_core::model::Title::new(Kind::Book, "Лавр", Date::parse("2026-10-10").unwrap());
         t.id = "lavr".into();
         st.put(polka_core::model::KIND, "lavr", &t).unwrap();
-        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let link = Link { port: l.local_addr().unwrap().port(), token: KEY.into(), pid: 1, app: "test".into() };
-        write_link(dir.path(), &link).unwrap();
-        let h = std::thread::spawn(move || {
-            let (stream, _) = l.accept().unwrap();
-            let r = accept(&stream, KEY).unwrap().unwrap();
-            let v = tools::read(&st, Date::parse("2026-11-15").unwrap(), &r.tool, &r.args).unwrap();
-            let mut out = &stream;
-            writeln!(out, "{}", serde_json::to_string(&Reply { ok: Some(v), err: None }).unwrap()).unwrap();
-        });
-        let v = call_app(dir.path(), "shelf", &json!({ "status": "want" })).ok().unwrap();
-        h.join().unwrap();
+        let st = Mutex::new(st);
+        link::listen(&CONNECTOR, dir.path(), "test", move |tool, args| tools::read(&st.lock().unwrap(), Date::parse("2026-11-15").unwrap(), tool, args).map_err(|e| e.to_string())).unwrap();
+        let v = link::forward(&CONNECTOR, dir.path(), "shelf", &json!({ "status": "want" })).unwrap();
         assert_eq!(v["total"], 1);
         assert_eq!(v["titles"][0]["title"], "Лавр");
         // Файла связи нет — «Полка» не запущена.
-        assert!(matches!(call_app(&dir.path().join("нет"), "summary", &json!({})), Err(CallError::NotRunning)));
+        assert_eq!(link::forward(&CONNECTOR, &dir.path().join("нет"), "summary", &json!({})), Err("«Полка» не запущена: откройте её на этом компьютере и повторите запрос.".into()));
     }
 
     #[cfg(desktop)]
     #[test]
     fn relay_finds_the_data_folder() {
         std::env::set_var("POLKA_DIR", "/tmp/polka-test-dir");
-        assert_eq!(data_dir(), PathBuf::from("/tmp/polka-test-dir"));
+        assert_eq!(link::data_dir(&CONNECTOR), PathBuf::from("/tmp/polka-test-dir"));
         std::env::remove_var("POLKA_DIR");
-        assert!(data_dir().ends_with("io.github.primusfixer.polka"));
+        assert!(link::data_dir(&CONNECTOR).ends_with("io.github.primusfixer.polka"));
     }
 }
