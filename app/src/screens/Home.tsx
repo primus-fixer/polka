@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Filter, Library, Nav } from '../App';
 import { api, message, type Goal, type Title } from '../api';
 import { dayShort, monthTitle, plural } from '../format';
-import { stored } from '../storage';
+import { stored } from '@primus-fixer/kit/ui';
 import { haystack, textMatches } from '../translit';
 import { Bar, Cover, Icon, Seg, shortBy } from '../ui';
 import { readPct } from './Card';

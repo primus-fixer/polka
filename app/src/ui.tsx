@@ -1,15 +1,11 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState } from 'react';
+import { addIcons, Icon } from '@primus-fixer/kit/ui';
 import { coverSrc, type Kind, type Title } from './api';
 import { ICONS } from './icons';
-import { store, stored } from './storage';
 
-export function Icon({ name, size = 20, stroke = 1.75, style }: { name: string; size?: number; stroke?: number; style?: CSSProperties }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={style}>
-      <path d={ICONS[name] ?? ''} />
-    </svg>
-  );
-}
+// Общие элементы экрана — из kit; значки «Полки» добавляются к значкам kit.
+addIcons(ICONS);
+export { Bar, Cut, Header, Icon, Row, Seg } from '@primus-fixer/kit/ui';
 
 // Обложка-заглушка: цвет — от названия, чтобы у книги он всегда был один и тот же.
 const PALETTE: [string, string][] = [
@@ -84,31 +80,6 @@ export function Cover({ t, size = 'grid', badge = false, src }: CoverProps) {
   );
 }
 
-export function Seg<T extends string>({ value, options, onChange, label, cols, small }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string; cols?: boolean; small?: boolean }) {
-  return (
-    <div
-      className={`seg${small ? ' small' : ''}`}
-      role="group"
-      aria-label={label}
-      style={cols ? { gridTemplateColumns: `repeat(${options.length}, minmax(max-content, 1fr))` } : { gridAutoFlow: 'column', gridAutoColumns: 'auto' }}
-    >
-      {options.map(([v, l]) => (
-        <button key={v} type="button" className={v === value ? 'on' : ''} aria-pressed={v === value} onClick={() => onChange(v)}>
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function Bar({ pct, color = 'var(--own)', thick }: { pct: number; color?: string; thick?: boolean }) {
-  return (
-    <span className={`bar${thick ? ' thick' : ''}`}>
-      <span style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
-    </span>
-  );
-}
-
 export function RatingPicker({ value, onChange }: { value: number | null | undefined; onChange: (v: number | null) => void }) {
   return (
     <div className="ratings" role="group" aria-label="Оценка от 1 до 10">
@@ -149,50 +120,6 @@ export function TagPicker({ value, known, onChange, placeholder = '+ метка'
       >
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={add} placeholder={placeholder} aria-label={addLabel} maxLength={40} />
       </form>
-    </div>
-  );
-}
-
-/** Раздел под катом: заголовок — кнопка, содержимое — по нажатию; открытые разделы запоминаются на устройстве. */
-export function Cut({ id, title, hint, className, children }: { id: string; title: string; hint?: string; className?: string; children: ReactNode }) {
-  const [open, setOpen] = useState(() => stored(`cut.${id}`, '0') === '1');
-  const toggle = () => {
-    store(`cut.${id}`, open ? '0' : '1');
-    setOpen(!open);
-  };
-  return (
-    <section className={`cut${open ? ' open' : ''}${className ? ` ${className}` : ''}`} id={id}>
-      <button type="button" className="cut-head" aria-expanded={open} aria-controls={`${id}-body`} onClick={toggle}>
-        <span className="cut-title">{title}</span>
-        {hint && <span className="cut-hint">{hint}</span>}
-        <Icon name="down" size={18} stroke={2} />
-      </button>
-      {open && (
-        <div className="stack-s cut-body" id={`${id}-body`}>
-          {children}
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="row">
-      <span className="muted">{label}</span>
-      <span className="row-val">{children}</span>
-    </div>
-  );
-}
-
-export function Header({ title, onBack, backLabel = 'Назад', right }: { title?: string; onBack: () => void; backLabel?: string; right?: ReactNode }) {
-  return (
-    <div className={'topbar' + (right ? ' with-right' : '')}>
-      <button type="button" className="icon-btn" aria-label={backLabel} onClick={onBack}>
-        <Icon name="left" size={24} stroke={2} />
-      </button>
-      {title ? <h1 className="topbar-title">{title}</h1> : <span />}
-      {right ?? <span />}
     </div>
   );
 }
