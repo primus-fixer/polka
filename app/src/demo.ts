@@ -42,7 +42,7 @@ let goal: Goal = { books: 24, screen: null };
 let lan: LanView = { name: 'Демо', hosts: ['192.168.1.34'], code: null, note: null, peers: [], nearby: [] };
 const QR_DEMO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1z" fill="none" stroke="#15232D" stroke-width="2"/><path d="M11 3h2v2h-2zM14 6h3v2h-3zM10 10h4v3h-4zM16 12h3v4h-3zM12 17h2v5h-2zM20 18h4v2h-4zM17 23h3v3h-3zM23 22h3v4h-3z" fill="#15232D"/></svg>';
 let backup: BackupStatus = { desktop: true, password: false, dir: 'C:\\Users\\Вы\\Documents\\Полка — копии', chosen: false, every: 'day', keep: 14, last: null, shared: null, error: null, running: false, cloud: false };
-const CLOUD_OFF: CloudStatus = { desktop: true, state: 'off', provider: null, title: null, dav: null, cloud_exists: false, backup_password: false, every: 'auto', running: false, progress: null, last: null, error: null, key_pending: false, notice: null };
+const CLOUD_OFF: CloudStatus = { desktop: true, providers: [{ code: 'yadisk', title: 'Яндекс Диск', kind: 'password' }, { code: 'webdav', title: 'Другой сервер WebDAV', kind: 'password' }], state: 'off', provider: null, title: null, login: null, dav: null, cloud_exists: false, backup_password: false, every: 'auto', running: false, progress: null, last: null, error: null, key_pending: false, notice: null };
 let cloud: CloudStatus = { ...CLOUD_OFF };
 // Вход в демо: PIN-код в памяти, отпечатка нет.
 let demoPin: string | null = null;
@@ -466,12 +466,12 @@ export const demo: Api = {
     backup = { ...backup, password: true, cloud: true };
     backupChanged();
     const at = Math.floor(Date.now() / 1000);
-    cloud = { ...cloud, state: 'ready', cloud_exists: true, last: { at, received: 0, sent: titles.length * 2, files_received: 0, files_sent: 4, files_waiting: 0, problems: [] } };
+    cloud = { ...cloud, state: 'ready', cloud_exists: true, last: { at, received: 0, sent: titles.length * 2, files_received: 0, files_sent: 4, files_waiting: 0, whole_received: 0, whole_sent: 0, whole_waiting: 0, problems: [] } };
     return clone({ ...cloud, backup_password: true, notice });
   },
   cloudSyncNow: async () => {
     await wait(500);
-    cloud = { ...cloud, last: { at: Math.floor(Date.now() / 1000), received: 0, sent: 0, files_received: 0, files_sent: 0, files_waiting: 0, problems: [] } };
+    cloud = { ...cloud, last: { at: Math.floor(Date.now() / 1000), received: 0, sent: 0, files_received: 0, files_sent: 0, files_waiting: 0, whole_received: 0, whole_sent: 0, whole_waiting: 0, problems: [] } };
     return clone({ ...cloud, backup_password: backup.password, notice: null });
   },
   cloudEvery: async (every) => {

@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub use kit::{valid_id, CodeState, Found, OnPaired, Peer, CODE_TRIES, CODE_TTL};
+pub use kit::{valid_id, CodeState, Found, Invite, OnPaired, Peer, CODE_TRIES, CODE_TTL};
 
 /// Связь по Wi-Fi «Полки»: у «Кармана» порты 47500/47501 и метки KRM*, у «Полки» свои.
 pub const LAN: kit::Lan = kit::Lan {
@@ -28,7 +28,22 @@ pub const LAN: kit::Lan = kit::Lan {
     host: b"polka-host",
     personal: b"polka-lan",
     not_ours: "это не «Полка»",
+    qr_scheme: crate::pairing::SCHEME,
+    qr_version: 1,
 };
+
+/// Что нужно связи по Wi-Fi в приложении от базы: местные настройки и число событий.
+impl kit::Device for Store {
+    fn local(&self, key: &str) -> Option<String> {
+        self.meta(key).ok().flatten()
+    }
+    fn set_local(&self, key: &str, value: &str) -> kit_core::Result<()> {
+        self.set_meta(key, value).map_err(|e| kit_core::Error::Store(e.to_string()))
+    }
+    fn event_count(&self) -> u64 {
+        Store::event_count(self).unwrap_or(0)
+    }
+}
 
 /// Порт обмена (TCP).
 pub const TCP_PORT: u16 = LAN.tcp_port;

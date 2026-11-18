@@ -37,12 +37,8 @@ struct AppState {
     dir: PathBuf,
     keys: Mutex<Keys>,
     net: Arc<Net>,
-    /// Номер этого устройства в журнале.
-    id: String,
     /// Как называть это устройство в копиях и при связи: имя компьютера или «Телефон».
     name: String,
-    /// Связь по Wi-Fi: код, связанные устройства, кто рядом.
-    lan: lan::Lan,
     /// Вход по PIN-коду: заблокирована ли «Полка».
     guard: Lock,
 }
@@ -569,11 +565,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let hooks = guard::Hooks {
                 // Пока «Полка» заблокирована, по прежнему коду связи не подключиться.
-                on_lock: Box::new(move || {
-                    if let Some(state) = handle.try_state::<AppState>() {
-                        lan::on_lock(&state);
-                    }
-                }),
+                on_lock: Box::new(move || lan::on_lock(&handle)),
                 // Вернулись в «Полку» — заодно обменяться с облаком, если давно не обменивались.
                 on_resume: Box::new(cloud::resumed),
             };
@@ -581,7 +573,9 @@ pub fn run() {
             app.manage(guard.clone());
             #[cfg(desktop)]
             let claude_dir = dir.clone();
-            app.manage(AppState { store, dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), id: me.id, name: device_name(), lan: lan::Lan::default(), guard });
+            app.manage(cloud::Sky::new(cloud::settings(), store.clone(), None));
+            app.manage(lan::Wifi::new(&polka_core::lan::LAN, &names::KEYS, store.clone(), me.id.clone(), device_name()));
+            app.manage(AppState { store, dir, keys: Mutex::new(keys), net: Arc::new(Net::new()), name: device_name(), guard });
             app.manage(reader::Books::default());
             // Коннектор для приложения Claude: ждём посредника `polka --mcp` на 127.0.0.1 —
             // после того как база открыта, чтобы первый же запрос нашёл её.
