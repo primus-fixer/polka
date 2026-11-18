@@ -2287,7 +2287,7 @@ dependencies = [
 [[package]]
 name = "kit-cloud"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
+source = "git+https://github.com/primus-fixer/kit?rev=43cb989f2a1423413b5ca9c9f30328688bd9da25#43cb989f2a1423413b5ca9c9f30328688bd9da25"
 dependencies = [
  "base64 0.22.1",
  "kit-core",
@@ -2299,7 +2299,7 @@ dependencies = [
 [[package]]
 name = "kit-core"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
+source = "git+https://github.com/primus-fixer/kit?rev=43cb989f2a1423413b5ca9c9f30328688bd9da25#43cb989f2a1423413b5ca9c9f30328688bd9da25"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -2307,6 +2307,7 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.3.4",
  "miniz_oxide 0.8.9",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -2318,7 +2319,7 @@ dependencies = [
 [[package]]
 name = "kit-secure"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
+source = "git+https://github.com/primus-fixer/kit?rev=43cb989f2a1423413b5ca9c9f30328688bd9da25#43cb989f2a1423413b5ca9c9f30328688bd9da25"
 dependencies = [
  "jni",
  "ndk-context",
@@ -2330,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "kit-tauri"
 version = "0.11.0"
-source = "git+https://github.com/primus-fixer/kit?rev=326f7aa5623a0ea38122a3bc2650682896536c86#326f7aa5623a0ea38122a3bc2650682896536c86"
+source = "git+https://github.com/primus-fixer/kit?rev=43cb989f2a1423413b5ca9c9f30328688bd9da25#43cb989f2a1423413b5ca9c9f30328688bd9da25"
 dependencies = [
  "base64 0.22.1",
  "if-addrs",
